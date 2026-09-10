@@ -1,0 +1,21 @@
+name: desktop_core
+description: Shared presentation and HTTP infrastructure for Hudu desktop tools.
+publish_to: none
+version: 1.0.0
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.5.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  assets:
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf

@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: Rails tests, lint, and security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: api
+    env:
+      RAILS_ENV: test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: api
+          bundler-cache: true
+      - name: Prepare SQLite and run Minitest
+        run: bundle exec rails db:prepare test
+      - name: RuboCop
+        run: bundle exec rubocop
+      - name: Brakeman
+        run: bundle exec brakeman --no-pager
+      - name: Audit dependency advisories
+        run: bundle exec ruby bin/bundler-audit check --update
+
+  api-container:
+    name: API container and HTTP persistence
+    needs: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build and start the documented Compose service
+        run: docker compose up --build --detach --wait --wait-timeout 180
+      - name: Verify JSON requests and persistence across restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent http://127.0.0.1:3000/health
+          payload='{"event_id":"8a37b605-f5ed-4ed8-bc70-c60e29632a17","process_name":"CI contract fixture","pid":123,"occurred_at":"2026-09-10T18:00:00.000Z"}'
+          code=$(curl --silent --output /tmp/hudu-event.json --write-out '%{http_code}' -H 'Content-Type: application/json' --data "$payload" http://127.0.0.1:3000/process_events)
+          test "$code" = 201
+          docker compose restart api
+          docker compose up --detach --wait --wait-timeout 60
+          code=$(curl --silent --output /tmp/hudu-retry.json --write-out '%{http_code}' -H 'Content-Type: application/json' --data "$payload" http://127.0.0.1:3000/process_events)
+          test "$code" = 200
+          diff /tmp/hudu-event.json /tmp/hudu-retry.json
+          curl --fail --silent http://127.0.0.1:3000/process_events
+      - name: Container diagnostics
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop the disposable CI service
+        if: always()
+        run: docker compose down --volumes
+
+  flutter:
+    name: Flutter checks (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - packages/desktop_core
+          - apps/network_lookup
+          - apps/process_manager
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Read pinned Flutter version
+        id: version
+        working-directory: .
+        run: echo "flutter=$(tr -d '\r\n' < .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.version.outputs.flutter }}
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter analyze --no-pub --fatal-infos
+      - run: flutter test --no-pub
+
+  desktop:
+    name: ${{ matrix.app }} / ${{ matrix.platform }}
+    needs: [api, flutter]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [network_lookup, process_manager]
+        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Read pinned Flutter version
+        id: version
+        shell: bash
+        working-directory: .
+        run: echo "flutter=$(tr -d '\r\n' < .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.version.outputs.flutter }}
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Run app and native smoke tests
+        run: flutter test --no-pub
+      - name: Set up Rails for macOS client integration
+        if: runner.os == 'macOS'
+        uses: ruby/setup-ruby@v1
+        with:
+          working-directory: api
+          bundler-cache: true
+      - name: Start the local API for macOS integration
+        if: runner.os == 'macOS'
+        working-directory: api
+        shell: bash
+        run: |
+          bundle exec rails db:prepare
+          bundle exec rails server -b 127.0.0.1 -p 3000 > "$RUNNER_TEMP/hudu-api.log" 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/health; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/hudu-api.log"
+          exit 1
+      - name: Exercise real Flutter repositories against Rails
+        if: runner.os == 'macOS'
+        env:
+          HUDU_API_SMOKE: 'true'
+        run: flutter test --no-pub test/api_smoke_test.dart
+      - name: Build unsigned release
+        run: flutter build ${{ matrix.platform }} --release --no-pub --dart-define=API_BASE_URL=http://127.0.0.1:3000
+      - name: Archive complete macOS application
+        if: runner.os == 'macOS'
+        working-directory: .
+        run: bash scripts/package-macos.sh "${{ matrix.app }}" "$RUNNER_TEMP/hudu-artifacts"
+      - name: Archive complete Windows bundle
+        if: runner.os == 'Windows'
+        working-directory: .
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -App '${{ matrix.app }}' -OutputDirectory "$env:RUNNER_TEMP/hudu-artifacts"
+      - name: Upload release zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: hudu-${{ matrix.app }}-${{ matrix.platform }}-${{ runner.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/hudu-artifacts/*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

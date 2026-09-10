@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="480" viewBox="0 0 1440 480" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">Hudu Project — Desktop utilities, thoughtfully engineered</title>
+  <desc id="description">Original project artwork in dark navy and mint. Precision connector lines link abstract network and process symbols. This is a project banner, not an application screenshot or a corporate logo.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1440" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1422"/>
+      <stop offset="1" stop-color="#132638"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="910" y1="78" x2="1300" y2="388" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#183444"/>
+      <stop offset="1" stop-color="#10212F"/>
+    </linearGradient>
+    <linearGradient id="trace" x1="832" y1="240" x2="1360" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#73DEC0" stop-opacity="0"/>
+      <stop offset="0.4" stop-color="#73DEC0"/>
+      <stop offset="1" stop-color="#73DEC0" stop-opacity="0.2"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" stroke="#8BA7B8" stroke-opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1440" height="480" rx="24" fill="url(#surface)"/>
+  <rect x="800" y="32" width="608" height="416" rx="16" fill="url(#grid)"/>
+  <path d="M40 88V40H88M1352 40H1400V88M40 392V440H88M1352 440H1400V392" stroke="#547586" stroke-opacity="0.5"/>
+  <path d="M80 115H117" stroke="#7DE2C3" stroke-width="3"/>
+  <text x="134" y="121" fill="#96B3C1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" letter-spacing="3">DESKTOP ENGINEERING / 01—02</text>
+  <text x="78" y="218" fill="#F2F1E9" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="76" font-weight="650" letter-spacing="-3">Hudu Project</text>
+  <text x="82" y="268" fill="#B5C7CF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="25">Desktop utilities, thoughtfully engineered.</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" letter-spacing="1.4">
+    <rect x="82" y="310" width="190" height="40" rx="8" fill="#18332F" stroke="#345C54"/>
+    <circle cx="102" cy="330" r="3" fill="#7DE2C3"/>
+    <text x="117" y="335" fill="#9DEBD4">NETWORK LOOKUP</text>
+    <rect x="284" y="310" width="204" height="40" rx="8" fill="#162937" stroke="#355060"/>
+    <path d="M303 326H311M303 330H311M303 334H311" stroke="#9ABBC8" stroke-width="1.5"/>
+    <text x="323" y="335" fill="#C5D7DF">PROCESS MANAGER</text>
+  </g>
+  <path d="M82 391H744" stroke="#355060" stroke-opacity="0.65"/>
+  <text x="82" y="420" fill="#86A3B2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="2">FLUTTER CLIENTS</text>
+  <circle cx="263" cy="416" r="2" fill="#648793"/>
+  <text x="281" y="420" fill="#86A3B2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="2">RAILS API</text>
+  <circle cx="404" cy="416" r="2" fill="#648793"/>
+  <text x="422" y="420" fill="#86A3B2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="2">LOCAL OS OPERATIONS</text>
+  <path d="M832 240H911M1297 240H1380M1104 48V93M1104 384V432" stroke="url(#trace)" stroke-width="1.5"/>
+  <rect x="918" y="88" width="374" height="296" rx="24" fill="#091725" stroke="#3F6471"/>
+  <rect x="930" y="100" width="350" height="272" rx="16" fill="url(#panel)" stroke="#314D5C"/>
+  <path d="M952 134H1258M952 340H1258" stroke="#3C5D6B" stroke-opacity="0.65"/>
+  <g fill="#90ADBA" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" letter-spacing="2">
+    <text x="953" y="123">LOCAL / CONNECTED</text>
+    <text x="953" y="358">02 CLIENTS</text>
+    <text x="1171" y="358">01 SERVICE</text>
+  </g>
+  <g stroke="#72DBBC" stroke-width="2">
+    <path d="M1002 210H1042V181H1170M1042 210V275H1170M1082 236H1124V210H1170M1124 236V301H1170" stroke-opacity="0.7"/>
+    <rect x="973" y="190" width="38" height="38" rx="10" fill="#204B44"/>
+    <rect x="1058" y="217" width="38" height="38" rx="10" fill="#204B44"/>
+    <circle cx="992" cy="209" r="6" fill="#87E7CA" stroke="none"/>
+    <path d="M1070 230H1084M1070 236H1084M1070 242H1079" stroke="#A1EDD7"/>
+  </g>
+  <g fill="#18313E" stroke="#537686">
+    <rect x="1170" y="168" width="66" height="26" rx="6"/>
+    <rect x="1170" y="197" width="66" height="26" rx="6"/>
+    <rect x="1170" y="262" width="66" height="26" rx="6"/>
+    <rect x="1170" y="291" width="66" height="26" rx="6"/>
+  </g>
+  <g fill="#91D9C5">
+    <rect x="1181" y="178" width="27" height="5" rx="2.5"/>
+    <rect x="1181" y="207" width="42" height="5" rx="2.5"/>
+    <rect x="1181" y="272" width="35" height="5" rx="2.5"/>
+    <rect x="1181" y="301" width="20" height="5" rx="2.5"/>
+  </g>
+  <g fill="#0D1D2B" stroke="#658F9B">
+    <circle cx="918" cy="240" r="4"/>
+    <circle cx="1292" cy="240" r="4"/>
+    <circle cx="1104" cy="88" r="4"/>
+    <circle cx="1104" cy="384" r="4"/>
+  </g>
+  <path d="M874 147V121H898M1314 351H1338V325" stroke="#6DD8B8" stroke-opacity="0.65"/>
+</svg>

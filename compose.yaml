@@ -1,0 +1,31 @@
+name: hudu-project
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      RAILS_ENV: development
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - api_storage:/rails/storage
+    command:
+      - /bin/sh
+      - -c
+      - bundle exec rails db:prepare && exec bundle exec rails server -b 0.0.0.0 -p 3000
+    healthcheck:
+      test:
+        - CMD
+        - ruby
+        - -rnet/http
+        - -e
+        - "exit(Net::HTTP.get_response(URI('http://127.0.0.1:3000/health')).code == '200' ? 0 : 1)"
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+volumes:
+  api_storage:

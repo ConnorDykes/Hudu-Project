@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# Prepare only when starting the API; test/console commands remain independent.
+if [ "${1:-}" = "bin/rails" ] && [ "${2:-}" = "server" ]; then
+  bundle exec rails db:prepare
+fi
+
+exec "$@"

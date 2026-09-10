@@ -1,0 +1,13 @@
+.git
+.bundle
+.env
+.env.*
+!.env.example
+config/master.key
+config/credentials*
+log/*
+tmp/*
+storage/*
+vendor/bundle
+coverage
+.DS_Store
