@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:desktop_core/desktop_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +44,30 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('Windows loading explains the bounded first-use wait', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      final pending = Completer<LocalResolution>();
+      await mount(tester, adapter: FakeNetworkAdapter(pending: pending.future));
+      await tester.enterText(find.byKey(const Key('ip-input')), '192.168.1.24');
+      await tester.tap(find.byKey(const Key('lookup-button')));
+      await tester.pump();
+      expect(
+        find.text(
+          'Windows network initialization may take up to 30 seconds on first use.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      pending.complete(exampleResolution);
+      await tester.pumpAndSettle();
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 
   testWidgets(
     'empty state and lookup fit minimum desktop size; Enter submits',

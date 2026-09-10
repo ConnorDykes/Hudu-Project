@@ -9,7 +9,7 @@ Future<void> main() async {
     return;
   }
   final adapter = NativeNetworkAdapter();
-  final snapshot = await adapter.interfaces();
+  final snapshot = await timedRead('interface metadata', adapter.interfaces);
   for (final interface in snapshot.interfaces) {
     check(
       canonicalIpv4(interface.ip) == interface.ip,
@@ -22,7 +22,7 @@ Future<void> main() async {
       );
     }
   }
-  final neighbors = await adapter.neighbors();
+  final neighbors = await timedRead('neighbor cache', adapter.neighbors);
   for (final neighbor in neighbors) {
     check(
       canonicalIpv4(neighbor.ip) == neighbor.ip,
@@ -39,7 +39,10 @@ Future<void> main() async {
   }
   final own = snapshot.interfaces.where((i) => i.mac != null).firstOrNull;
   if (own != null) {
-    final resolution = await adapter.resolve(own.ip, interfaceName: own.name);
+    final resolution = await timedRead(
+      'own-IP metadata',
+      () => adapter.resolve(own.ip, interfaceName: own.name),
+    );
     check(
       resolution.isOwnInterface && resolution.mac == own.mac,
       'Own IP must use interface metadata',
@@ -54,4 +57,17 @@ Future<void> main() async {
 
 void check(bool condition, String message) {
   if (!condition) throw StateError(message);
+}
+
+Future<T> timedRead<T>(String label, Future<T> Function() read) async {
+  stdout.writeln('Native smoke: reading $label.');
+  final clock = Stopwatch()..start();
+  try {
+    return await read();
+  } finally {
+    // Stage and timing only; useful for cold-start failures without host data.
+    stdout.writeln(
+      'Native smoke: $label elapsed ${clock.elapsedMilliseconds} ms.',
+    );
+  }
 }

@@ -255,17 +255,21 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
         const SizedBox(height: 16),
         interfaces.when(
           skipLoadingOnRefresh: false,
-          loading: () => const Row(
+          loading: () => Row(
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(width: 10),
-              Text(
-                'Reading active interfaces…',
-                style: TextStyle(color: AppTheme.muted, fontSize: 12),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  Theme.of(context).platform == TargetPlatform.windows
+                      ? 'Reading active interfaces… $_windowsDiscoveryHint'
+                      : 'Reading active interfaces…',
+                  style: const TextStyle(color: AppTheme.muted, fontSize: 12),
+                ),
               ),
             ],
           ),
@@ -420,6 +424,14 @@ class LookupResultCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
+            if (state.phase == LookupPhase.discovering &&
+                Theme.of(context).platform == TargetPlatform.windows) ...[
+              Text(
+                _windowsDiscoveryHint,
+                style: const TextStyle(color: AppTheme.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               state.ip ?? '',
               style: const TextStyle(
@@ -548,6 +560,10 @@ class LookupResultCard extends StatelessWidget {
 }
 
 const _amber = Color(0xFFF2C77B);
+
+final _windowsDiscoveryHint =
+    'Windows network initialization may take up to '
+    '${NativeNetworkAdapter.windowsDiscoveryTimeout.inSeconds} seconds on first use.';
 
 class _IdentityField extends StatelessWidget {
   const _IdentityField({required this.label, required this.value});

@@ -24,7 +24,11 @@ class FixtureRunner implements CommandRunner {
   final Map<String, Object> outputs;
   final calls = <(String, List<String>)>[];
   @override
-  Future<String> run(String executable, List<String> arguments) async {
+  Future<String> run(
+    String executable,
+    List<String> arguments, {
+    Duration? timeout,
+  }) async {
     calls.add((executable, arguments));
     final output = outputs[executable];
     if (output is String) return output;

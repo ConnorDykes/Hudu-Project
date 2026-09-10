@@ -109,4 +109,27 @@ void main() {
       expect(await scope.read(historyProvider.future), isEmpty);
     },
   );
+  test(
+    'native timeout clears busy state without retrying or persisting',
+    () async {
+      final pending = Completer<LocalResolution>();
+      final adapter = FakeNetworkAdapter(pending: pending.future);
+      final repository = FakeLookupRepository();
+      final scope = container(adapter, repository);
+      final request = scope
+          .read(lookupControllerProvider.notifier)
+          .lookup('192.168.1.24');
+      expect(scope.read(lookupControllerProvider).busy, isTrue);
+      pending.completeError(
+        const NetworkFailure(
+          'Reading network information timed out. Please try again.',
+        ),
+      );
+      await request;
+      expect(scope.read(lookupControllerProvider).phase, LookupPhase.failed);
+      expect(scope.read(lookupControllerProvider).busy, isFalse);
+      expect(adapter.resolveCalls, 1);
+      expect(repository.submitCalls, 0);
+    },
+  );
 }

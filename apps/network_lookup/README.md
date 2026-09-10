@@ -46,9 +46,13 @@ Discovery semantics:
   optimistic invented rows. OS errors, lookup failures, and history failures are
   independently presented. Riverpod 3 providers support injected adapters,
   repositories, and transport for testing.
-- Each native command has an eight-second execution timeout and a 1 MiB output
-  limit per stream. Raw command errors are not shown because they can contain
-  private machine information. Only the app's own command children are stopped.
+- Windows discovery shares a 30-second deadline across its native commands,
+  including process startup, to accommodate slow first-use initialization.
+  macOS retains eight-second command limits within a 24-second discovery budget.
+  Output is limited to 1 MiB per stream. Timeout cleanup attempts to stop only
+  the app's own command children and releases their pipes, including late starts;
+  it does not claim an observed exit. Raw errors are hidden because they can
+  contain private machine information. No automatic command retries are used.
 
 macOS Debug/Profile and Release are intentionally **unsandboxed desktop utility**
 builds, with network-client entitlement, because the app executes native tools.

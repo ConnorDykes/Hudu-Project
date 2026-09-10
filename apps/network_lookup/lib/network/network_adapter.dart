@@ -94,8 +94,20 @@ abstract interface class NetworkAdapter {
 }
 
 abstract interface class CommandRunner {
-  Future<String> run(String executable, List<String> arguments);
+  Future<String> run(
+    String executable,
+    List<String> arguments, {
+    Duration? timeout,
+  });
 }
+
+typedef ProcessStarter = Future<Process> Function(
+  String executable,
+  List<String> arguments,
+);
+
+Future<Process> _startProcess(String executable, List<String> arguments) =>
+    Process.start(executable, arguments, runInShell: false);
 
 /// Direct processes only; bounded wall time and bounded captured output.
 /// Raw OS output is never included in a UI error (it can contain private data).
@@ -103,44 +115,76 @@ class NativeCommandRunner implements CommandRunner {
   const NativeCommandRunner({
     this.timeout = const Duration(seconds: 8),
     this.maxOutputBytes = 1024 * 1024,
+    this.startProcess = _startProcess,
   });
   final Duration timeout;
   final int maxOutputBytes;
+  final ProcessStarter startProcess;
 
   @override
-  Future<String> run(String executable, List<String> arguments) async {
+  Future<String> run(
+    String executable,
+    List<String> arguments, {
+    Duration? timeout,
+  }) async {
     Process? process;
+    final readers = <StreamIterator<List<int>>>[];
+    var expired = false;
     try {
-      process = await Process.start(executable, arguments, runInShell: false);
-      final child = process;
-      Future<String> read(Stream<List<int>> stream) async {
-        final bytes = <int>[];
-        await for (final chunk in stream) {
-          if (bytes.length + chunk.length > maxOutputBytes) {
+      // The deadline covers process creation as well as output/exit. A process
+      // that finishes starting after expiry receives a cleanup attempt as well.
+      return await (() async {
+        final child = await startProcess(executable, arguments);
+        process = child;
+        if (expired) {
+          try {
             child.kill();
-            throw const NetworkFailure(
-              'The network command returned too much data.',
-            );
+          } finally {
+            // Subscribe then cancel both pipes, including buffered output. Do
+            // not await stream shutdown or extend the already-expired caller.
+            child.stdout.listen(null).cancel().ignore();
+            child.stderr.listen(null).cancel().ignore();
           }
-          bytes.addAll(chunk);
+          throw const NetworkFailure(
+            'Network command startup exceeded its deadline.',
+          );
         }
-        return utf8.decode(bytes, allowMalformed: false);
-      }
+        Future<String> read(Stream<List<int>> stream) async {
+          final bytes = <int>[];
+          final reader = StreamIterator(stream);
+          readers.add(reader);
+          while (await reader.moveNext()) {
+            final chunk = reader.current;
+            if (bytes.length + chunk.length > maxOutputBytes) {
+              throw const NetworkFailure(
+                'The network command returned too much data.',
+              );
+            }
+            bytes.addAll(chunk);
+          }
+          return utf8.decode(bytes, allowMalformed: false);
+        }
 
-      final results = await Future.wait<Object>([
-        child.exitCode,
-        read(child.stdout),
-        read(child.stderr),
-      ], eagerError: true).timeout(timeout);
-      if (results[0] != 0 || (results[2] as String).trim().isNotEmpty) {
-        throw const NetworkFailure(
-          'The operating system could not read network information. '
-          'Check network permissions and native command availability.',
-        );
-      }
-      return results[1] as String;
+        final results = await Future.wait<Object>([
+          child.exitCode,
+          read(child.stdout),
+          read(child.stderr),
+        ], eagerError: true);
+        if (results[0] != 0 || (results[2] as String).trim().isNotEmpty) {
+          throw const NetworkFailure(
+            'The operating system could not read network information. '
+            'Check network permissions and native command availability.',
+          );
+        }
+        return results[1] as String;
+      })().timeout(
+        timeout ?? this.timeout,
+        onTimeout: () {
+          expired = true;
+          throw TimeoutException('Native network command deadline exceeded');
+        },
+      );
     } on TimeoutException {
-      process?.kill();
       throw const NetworkFailure(
         'Reading network information timed out. Please try again.',
       );
@@ -154,7 +198,15 @@ class NativeCommandRunner implements CommandRunner {
       );
     } finally {
       // Only our own disposable command process can be terminated here.
-      process?.kill();
+      try {
+        process?.kill();
+      } finally {
+        // Cancellation also releases pipes if the OS refuses termination.
+        // Completion of native cleanup is not a prerequisite for the deadline.
+        for (final reader in readers) {
+          reader.cancel().ignore();
+        }
+      }
     }
   }
 }
@@ -345,11 +397,46 @@ LocalResolution selectResolution(
 }
 
 class NativeNetworkAdapter implements NetworkAdapter {
-  NativeNetworkAdapter({CommandRunner? runner, String? operatingSystem})
-    : runner = runner ?? const NativeCommandRunner(),
-      operatingSystem = operatingSystem ?? Platform.operatingSystem;
+  NativeNetworkAdapter({
+    CommandRunner? runner,
+    String? operatingSystem,
+    Stopwatch Function()? stopwatchFactory,
+  }) : runner = runner ?? const NativeCommandRunner(),
+       operatingSystem = operatingSystem ?? Platform.operatingSystem,
+       _stopwatchFactory = stopwatchFactory ?? Stopwatch.new;
   final CommandRunner runner;
   final String operatingSystem;
+  final Stopwatch Function() _stopwatchFactory;
+
+  // Windows PowerShell must initialize CLR, NetTCPIP/NetAdapter modules and CIM
+  // providers. The former 8s per-command limit failed a cold Windows CI host.
+  // 30s is an interactive UX cap with startup headroom, not an OS guarantee.
+  // All commands within ONE discovery share this deadline (not 30s each).
+  static const windowsDiscoveryTimeout = Duration(seconds: 30);
+  static const macCommandTimeout = Duration(seconds: 8);
+  static const macDiscoveryTimeout = Duration(seconds: 24);
+
+  Stopwatch _startDeadline() => _stopwatchFactory()..start();
+
+  Future<String> _run(
+    String executable,
+    List<String> arguments,
+    Stopwatch elapsed,
+  ) {
+    final total = operatingSystem == 'windows'
+        ? windowsDiscoveryTimeout
+        : macDiscoveryTimeout;
+    final remaining = total - elapsed.elapsed;
+    if (remaining <= Duration.zero) {
+      throw const NetworkFailure(
+        'Reading network information timed out. Please try again.',
+      );
+    }
+    final budget = operatingSystem != 'windows' && remaining > macCommandTimeout
+        ? macCommandTimeout
+        : remaining;
+    return runner.run(executable, arguments, timeout: budget);
+  }
 
   // Fixed scripts: target IP and user input are never interpolated in PowerShell.
   static const neighborScript = r'''
@@ -381,34 +468,43 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
 }) | ConvertTo-Json -Compress
 ''';
 
-  Future<String> _powershell(String script) async {
+  Future<String> _powershell(String script, Stopwatch elapsed) async {
     final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-    final output = await runner.run(
+    final output = await _run(
       '$systemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+      elapsed,
     );
     // PowerShell emits nothing for an empty pipeline.
     return output.trim().isEmpty ? '[]' : output;
   }
 
   @override
-  Future<InterfaceSnapshot> interfaces() async {
+  Future<InterfaceSnapshot> interfaces() => _interfaces(_startDeadline());
+
+  Future<InterfaceSnapshot> _interfaces(Stopwatch elapsed) async {
     List<LocalInterface> values;
     String? notice;
     if (operatingSystem == 'macos') {
       String? primary;
       try {
-        final route = await runner.run('/sbin/route', ['-n', 'get', 'default']);
+        final route = await _run('/sbin/route', [
+          '-n',
+          'get',
+          'default',
+        ], elapsed);
         primary = RegExp(r'interface:\s*(\S+)').firstMatch(route)?[1];
       } on NetworkFailure {
         notice = 'Default route unavailable. Choose an active interface below.';
       }
       values = parseMacInterfaces(
-        await runner.run('/sbin/ifconfig', ['-a']),
+        await _run('/sbin/ifconfig', ['-a'], elapsed),
         primaryName: primary,
       );
     } else if (operatingSystem == 'windows') {
-      values = parseWindowsInterfaces(await _powershell(interfaceScript));
+      values = parseWindowsInterfaces(
+        await _powershell(interfaceScript, elapsed),
+      );
     } else {
       throw const NetworkFailure(
         'Network discovery supports macOS and Windows desktop.',
@@ -422,12 +518,14 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
     return InterfaceSnapshot(values, notice: notice);
   }
 
-  Future<List<NeighborEntry>> neighbors() async {
+  Future<List<NeighborEntry>> neighbors() => _neighbors(_startDeadline());
+
+  Future<List<NeighborEntry>> _neighbors(Stopwatch elapsed) async {
     if (operatingSystem == 'macos') {
-      return parseMacArp(await runner.run('/usr/sbin/arp', ['-an']));
+      return parseMacArp(await _run('/usr/sbin/arp', ['-an'], elapsed));
     }
     if (operatingSystem == 'windows') {
-      return parseWindowsNeighbors(await _powershell(neighborScript));
+      return parseWindowsNeighbors(await _powershell(neighborScript, elapsed));
     }
     throw const NetworkFailure(
       'Network discovery supports macOS and Windows desktop.',
@@ -442,7 +540,8 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
         'Enter a valid IPv4 address, such as 192.168.1.10.',
       );
     }
-    final local = await interfaces();
+    final elapsed = _startDeadline();
+    final local = await _interfaces(elapsed);
     // Self resolution must not depend on ARP access or a self cache entry.
     final isOwn = local.interfaces.any(
       (i) =>
@@ -452,7 +551,7 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
     return selectResolution(
       canonical,
       local.interfaces,
-      isOwn ? [] : await neighbors(),
+      isOwn ? [] : await _neighbors(elapsed),
       interfaceName: interfaceName,
     );
   }
