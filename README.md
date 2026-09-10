@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented. Local macOS checks are passing; hosted Windows builds and final delivery verification are in progress. See the [verification record](docs/verification-results.md) for the exact scope of completed checks.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **85 Flutter tests and 39 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 
@@ -66,7 +66,7 @@ OS operations execute on the desktop client. Rails stores history and queries th
 | Windows | Native Flutter and Visual Studio **Desktop development with C++**; Rails in WSL2 |
 | Optional API container | Docker with Compose; keep Flutter on the native host |
 
-Install the toolchains first; see [Development](docs/development.md) for platform setup, API configuration, and troubleshooting. These commands are the integration runbook; clean-clone verification is pending.
+Install the toolchains first; see [Development](docs/development.md) for platform setup, API configuration, and troubleshooting. macOS setup has been checked from a fresh public clone.
 
 ### macOS
 
@@ -127,26 +127,33 @@ docker compose up --build --wait api
 docker compose logs api
 ```
 
-Compose prepares SQLite, persists it in a named volume, and publishes only `127.0.0.1:3000`. Run Flutter on the native host as above. `docker compose down` stops the API while retaining history. Container execution is still pending verification.
+Compose prepares SQLite, persists it in a named volume, and publishes only `127.0.0.1:3000`. Run Flutter on the native host as above. `docker compose down` stops the API while retaining history. CI exercises container startup, JSON requests, and persistence across restart.
 
 The checked-in [developer scripts](scripts/README.md) also provide setup/check/run/build commands. For example, `bash scripts/dev.sh setup` then `bash scripts/dev.sh run network_lookup` on macOS; with Rails in WSL2 or Docker, use `./scripts/dev.ps1 setup flutter` then `./scripts/dev.ps1 run network_lookup` on Windows.
 
 ## Tests, builds, and downloads
 
-Run `bundle exec rails test` from `api/`. From each app and `packages/desktop_core/`, run `flutter pub get`, `flutter analyze`, and `flutter test`. Run `flutter build macos --release` on macOS or `flutter build windows --release` on Windows from each app directory. These are commands to execute, not reported passing results.
+Run `bundle exec rails test` from `api/`. From each app and `packages/desktop_core/`, run `flutter pub get`, `flutter analyze`, and `flutter test`. Run `flutter build macos --release` on macOS or `flutter build windows --release` on Windows from each app directory. See the [test and build matrix](docs/testing.md) for native smoke tests, real API integration, and packaging commands.
 
-The [test and build matrix](docs/testing.md) separates automated checks, native builds, integration, and manual UI evidence. [GitHub Actions](https://github.com/ConnorDykes/Hudu-Project/actions) and [Releases](https://github.com/ConnorDykes/Hudu-Project/releases) are the delivery destinations; successful runs and downloadable artifacts are **not yet verified**. Planned artifacts are unsigned development builds. Windows distribution requires the complete release folder, including its DLLs and data.
+Download the [v1.0.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.0.0):
+
+| App | macOS · Intel + Apple Silicon | Windows · x64 |
+| --- | --- | --- |
+| Network Lookup | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-network_lookup-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-network_lookup-windows-x64.zip) |
+| Process Manager | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-process_manager-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-process_manager-windows-x64.zip) |
+
+Start Rails before using API-backed features. macOS builds require macOS 12 or later. On Windows, extract the **entire** archive together and install the [Visual C++ x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) if needed. These are development bundles without verified signing/notarization or installers; if platform security blocks a download, build from reviewed source rather than disabling system-wide protections. Native CI, artifact provenance, checksums, and manual-testing limits are recorded in the release notes and [verification record](docs/verification-results.md).
 
 ## Engineering choices and limits
 
 - **Local IPv4 discovery:** ARP cannot identify a remote host's MAC across routers. An absent cache entry does not prove a device is offline. IPv6 discovery is outside the initial scope; VPNs and multiple adapters can make automatic address selection ambiguous.
 - **Explicit writes:** `POST /lookups` performs and persists a lookup. The assignment's GET example is adapted because this operation creates history; `GET /lookups` reads history. See [API reference](docs/api.md).
 - **Truthful process outcomes:** requesting termination is distinct from observing exit. Permissions and platform semantics apply. macOS PID-based signaling retains a race between identity validation and signaling.
-- **Independent audit delivery:** after confirmed exit, a failed audit upload should be queued locally with a stable event ID. Retrying delivery must never terminate a process again. End-to-end recovery verification is pending.
+- **Independent audit delivery:** confirmed exits are queued locally with a stable event ID. Delivery retries never terminate a process again. Recovery and retry behavior have automated tests; disk-write failures are explicit, and a crash between exit and durable persistence can still lose an event.
 - **Local service:** the API has no authentication. Bind it to loopback; this project does not provide a public hosted API, signed installers, notarization, or an App Store distribution claim.
 
 ## Documentation and AI collaboration
 
 [Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md)
 
-The main agent owns contracts, shared infrastructure, integration, and review. Subagents implement the API, each desktop app, build tooling, and documentation in separate scopes. The [AI development log](docs/ai-development.md) records those factual responsibilities and distinguishes planned checks from supplied evidence. The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.
+The main agent owned contracts, shared infrastructure, integration, and delivery. Scoped subagents implemented the API, each desktop app, build tooling, and documentation; separate review agents checked the work. The [AI development log](docs/ai-development.md) records actual findings, corrections, and verification boundaries. The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.

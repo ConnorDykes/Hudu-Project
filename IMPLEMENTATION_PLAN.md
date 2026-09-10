@@ -1,5 +1,7 @@
 # Hudu Project — Implementation Plan
 
+This is the original planning record. Implementation is now delivered in the public repository; see [verification results](docs/verification-results.md) for completed checks and remaining distribution/manual-testing limits. The starting-point observations below describe the workspace before implementation, not its current state.
+
 ## Objective
 
 Create a public `ConnorDykes/Hudu-Project` repository containing both Hudu take-home options: an IP/MAC/vendor lookup app and a process manager. Each Flutter app will target macOS and Windows, with a shared Rails API providing persistence and the required endpoints.
@@ -8,14 +10,14 @@ The assignment asks candidates to choose one option; implementing both is Connor
 
 Source: [Hudu assignment](https://internal.huducloud.com/shared_article/XhSiLQv7vY2BRNM5vZ9GfKD4/flutter-rails-engineer-take-home-project).
 
-## Verified starting point
+## Verified starting point · before implementation
 
 - GitHub CLI is authenticated as `ConnorDykes`, and that account is active.
 - The proposed `ConnorDykes/Hudu-Project` repository did not resolve during inspection; verify availability again before creation. The README title will be “Hudu Project.”
 - The local workspace is an empty Git repository without commits or a remote.
 - Xcode 26.6 is available. Flutter and Dart were not found on PATH. The Ruby on PATH is Apple's 2.6.10, so a supported project Ruby must be provisioned separately.
 - Native subagent tools are available. One planning reviewer was delegated a read-only platform and verification review.
-- This document is the planning deliverable; implementation and public repository creation have not started.
+- At this planning checkpoint, implementation and public repository creation had not started.
 
 ## Architecture
 

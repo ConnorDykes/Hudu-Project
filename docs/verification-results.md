@@ -1,25 +1,45 @@
 # Verification results
 
-This file records checks actually performed during implementation. The automated workflow is the repeatable source of test and build evidence; a compiled binary alone is not a manual UI check.
+Checks performed on September 10, 2026. A native adapter test, compiled binary, and interactive GUI review are different kinds of evidence; this record does not conflate them.
 
-| Area | Current evidence |
+## Revisions and CI
+
+- Initial implementation: [35a1f56](https://github.com/ConnorDykes/Hudu-Project/commit/35a1f566dafac6e4970e934d7004b53675259140). [All nine CI jobs passed](https://github.com/ConnorDykes/Hudu-Project/actions/runs/34513399505), including four native app/platform builds.
+- Audit review fixes: [7a4ecb8](https://github.com/ConnorDykes/Hudu-Project/commit/7a4ecb8e6c59de2e88f038562b4c6c79cf562288). Its [CI run](https://github.com/ConnorDykes/Hudu-Project/actions/runs/34514570473) passed eight jobs but exposed the Windows network command's eight-second timeout. This failure was investigated, not skipped or hidden by a retry.
+- Final code: [3f43162](https://github.com/ConnorDykes/Hudu-Project/commit/3f4316293561a240d7d53c87cdf8ac4e80c1a7b1), adding bounded Windows cold-start headroom and cleanup regressions. [All nine final CI jobs passed](https://github.com/ConnorDykes/Hudu-Project/actions/runs/34515948693), including all four release builds and artifact uploads.
+- Documentation-only changes after the final code revision do not alter the tested binaries.
+
+## Executed checks
+
+| Area | Evidence |
 | --- | --- |
-| Shared Flutter package | `flutter analyze`: no issues. `flutter test`: 7 passing tests, covering HTTP behavior and desktop layout/navigation at two window sizes. |
-| Rails API | Main independently reran 39 tests / 438 assertions, all passing; RuboCop clean, Brakeman zero warnings, dependency audit clean. Live HTTP: health 200; vendor lookup 201 with persisted Apple result; disposable-process audit 201, identical retry 200, conflicting retry 409, and history readback. |
-| Network Lookup | Main independently passed analysis, 31 tests (three opt-in cases skipped by default), native macOS interface/cache and own-IP checks, and two real Rails repository checks including a live vendor lookup. Worker release build completed; production-widget preview rendered and inspected. |
-| Process Manager | Implementation and native verification in progress. |
-| Windows builds | Native CI verification pending. |
-| macOS builds | Both workers produced release apps. Main inspected the native executables and Dart App frameworks: both contain x86_64 and arm64 slices. Final hosted build/artifact checks pending. |
-| Documentation | Original SVG banner and both production-widget previews rendered and visually inspected. Clean-clone instructions pending. |
+| Rails API | Main independently reran **39 tests / 438 assertions**, zero failures/errors/skips. RuboCop: 34 files clean. Brakeman: zero warnings. Dependency advisory audit: clean. |
+| Shared Flutter package | Analysis clean; **7 tests** pass, including HTTP behavior and layout/navigation at two window sizes. |
+| Network Lookup | Analysis clean; **41 default tests** pass on macOS, with three opt-in cases skipped. This includes native interfaces/cache and own-IP checks, shared operation deadlines, process-start timing, pipe cleanup, and Windows loading text. Two opt-in real Rails tests pass, including a live vendor lookup; the production-widget golden comparison also passes. |
+| Process Manager | Analysis clean; **37 default tests** pass on macOS, with two opt-in cases skipped. Includes a real disposable-child termination, audit outbox recovery, concurrent delivery/history regressions, and storage-warning widget cases. The real Rails audit smoke also passes. |
+| Live HTTP | Health 200; lookup 201 with persisted Apple vendor; disposable-child audit 201, identical retry 200, conflicting retry 409, and history readback. |
+| Container | Hosted Compose test passes startup, JSON event creation, service restart, identical retry, and persistence readback. |
+| Native platforms | Final hosted run passes native adapter tests and release builds for both apps on macOS and Windows. The Windows network interface stage takes 8,491 ms, neighbor cache 816 ms, and own-IP metadata 1,983 ms; every native assertion passes. Only test-harness-created processes are terminated. |
+| Local release builds | Both macOS release builds pass. Main inspected the app executables and Dart frameworks: both have Intel x86_64 and Apple Silicon arm64 slices; minimum macOS version 12.0. |
+| Downloadable archives | Main downloaded all four final CI archives and passed ZIP integrity, safe-path, runtime/data, and bundled font-license checks. Extracted macOS executables and Dart frameworks are universal with minimum macOS 12.0; Windows executables are PE32+ x86-64. The [v1.0.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.0.0) includes the original ZIPs and SHA-256 checksums. |
+| Clean clone | A fresh clone of the public repository passes `bash scripts/dev.sh setup`, `bash scripts/dev.sh check`, and the Network Lookup macOS release build. Following the reviewed fixes, the updated clean clone separately passes all 37 Process Manager and 41 Network Lookup tests. Main also rebuilt the final Network Lookup macOS release locally. |
+| Visuals | Original SVG banner and both actual production-widget previews were rendered and visually inspected. Previews use synthetic records, bundled Inter, and Material icons; they contain no private machine data. |
+| Independent review | API/shared/build reviewer: no actionable findings. App reviewer: two concurrency findings, both corrected with regression tests and accepted in targeted re-review. |
 
-## Integration findings
+The **85-test Flutter total** is 7 shared + 41 network + 37 process tests on macOS. Linux skips native cases; screenshots and real HTTP tests are opt-in and are not included in that default total. These counts are not code-coverage percentages.
 
-- The main agent found that the live Rails server rejected a syntactically valid JSON POST while its health endpoint worked. Rails 8.1.3.1's parser call was incompatible with JSON 3. The API worker constrained JSON below 3, added raw-request regression coverage, and the main agent restarted the server and verified the original request returned 201 with persisted vendor data.
-- Main review caught an audit timestamp precision mismatch between microsecond client timestamps and millisecond API serialization. The process worker normalized event creation timestamps and added a regression; main verified the test exists, with final execution results pending below.
+## Integration corrections
 
-## Boundaries
+1. **JSON compatibility:** a real request exposed Rails 8.1.3.1's parser incompatibility with JSON 3. The dependency is constrained below 3 and locked to 2.21.2; raw-request regression and independent live retest pass.
+2. **Audit acknowledgment precision:** event creation uses millisecond timestamps matching API serialization; retry identity/time stay stable. Regression and real API tests pass.
+3. **Concurrent history refresh:** a queued follow-up prevents an older GET from leaving history stale after audit delivery. Controlled delayed-response regression passes.
+4. **Concurrent storage failure:** an older successful upload cannot clear a newer memory-only event's warning. Controller and widget regressions preserve the warning and prevent a false “Saved locally” label.
+5. **Windows discovery timeout:** CI proved that an eight-second command deadline was exceeded; cold PowerShell/CIM initialization is the likely explanation, not a measured root-cause guarantee. Windows now has one shared 30-second discovery deadline including startup. No automatic retries or native-test skips were added. A read-only reviewer caught unconsumed pipes on the late-start cleanup path; both pipes are now cancelled, with buffered-output and refused-termination regressions. Targeted re-review found no remaining actionable issue.
 
-- Process tests only target disposable children spawned by the test harness.
-- Public UI previews use the real production Flutter widgets with synthetic data. Live machine/network details are not included in repository screenshots.
-- Signed/notarized installers and App Store submission are outside this development-artifact release.
-- Interactive native UI inspection is currently blocked by the locked Mac. The user has been asked to unlock it. Automated widget rendering, native adapter checks, and build inspection are separate evidence and continue without claiming an interactive review.
+## Remaining boundaries
+
+- Interactive native GUI inspection was blocked by the locked Mac. No lock bypass was attempted. Neither Mac interactive review nor Windows manual GUI testing is claimed.
+- Windows native adapters and binaries are tested in hosted CI; the Windows/WSL2 developer-networking instructions have not been manually exercised.
+- Archives are development bundles without verified Developer ID signing, notarization, Windows Authenticode signing, or installers. The API runs separately and has no authentication; keep it on loopback.
+- Public vendor availability/rate limits may change. Deterministic API tests stub that service.
+- macOS PID signaling retains a race after identity validation. A crash between observing exit and durable outbox persistence can lose an audit event. File recovery is tested, not a claim of atomic OS termination plus storage.

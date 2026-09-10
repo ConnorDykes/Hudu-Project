@@ -1,6 +1,6 @@
 # Development
 
-The runbook targets Flutter **3.47.2**, Ruby **4.0.2**, and Rails **8.1.3.1**. Version declarations are in `.flutter-version`, `.ruby-version`, and `api/Gemfile`. Commands below were reconciled with the available setup scripts and Compose source; clean-clone execution remains pending integration verification.
+The runbook targets Flutter **3.47.2**, Ruby **4.0.2**, and Rails **8.1.3.1**. Version declarations are in `.flutter-version`, `.ruby-version`, and `api/Gemfile`. macOS setup and checks have been exercised from a fresh public clone; Docker startup and persistence are checked in CI. See [verification results](verification-results.md) for platform-specific evidence.
 
 ## Repository layout
 
@@ -17,7 +17,7 @@ Run Rails and Flutter in separate terminals. The two apps can be evaluated indep
 
 ## macOS native setup
 
-Install Flutter 3.47.2, Xcode and its command-line tools, and CocoaPods if needed by the native plugins. Use [Flutter's macOS setup guide](https://docs.flutter.dev/platform-integration/macos/setup) to resolve desktop tooling requirements. Provision Ruby 4.0.2 with your preferred Ruby version manager and activate it before installing gems; do not assume Apple's system Ruby matches the project.
+Install Flutter 3.47.2 from the [SDK archive](https://docs.flutter.dev/install/archive), Xcode and its command-line tools, and CocoaPods if needed by the native plugins. Use [Flutter's macOS setup guide](https://docs.flutter.dev/platform-integration/macos/setup) to resolve desktop tooling requirements. Provision Ruby 4.0.2 with your preferred Ruby version manager and activate it before installing gems; do not assume Apple's system Ruby matches the project.
 
 ```sh
 git clone https://github.com/ConnorDykes/Hudu-Project.git
@@ -43,7 +43,7 @@ In another terminal, verify readiness:
 curl --fail http://127.0.0.1:3000/health
 ```
 
-The expected contract response is `{"status":"ok"}`. This is an expectation, not a report of a completed check.
+The response is `{"status":"ok"}` when Rails and its database are ready.
 
 From the repository root in another terminal, choose one app:
 
@@ -103,7 +103,7 @@ Windows can normally access a WSL-hosted network app through localhost, but WSL 
 
 ## Optional Docker API
 
-Docker is an alternative to a host Ruby installation; Flutter remains native. Install and start Docker with Compose and Linux container support. The following commands match the checked-in `compose.yaml`; a real startup check remains pending:
+Docker is an alternative to a host Ruby installation; Flutter remains native. Install and start Docker with Compose and Linux container support. From the repository root:
 
 ```sh
 # From the repository root.

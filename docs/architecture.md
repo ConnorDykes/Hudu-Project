@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the agreed design while implementation and integration are in progress. [contracts.md](contracts.md) is canonical for wire behavior; [testing.md](testing.md) records verification status.
+This document describes the implemented design. [contracts.md](contracts.md) is canonical for wire behavior; [verification results](verification-results.md) records execution evidence and limits.
 
 ## Boundaries
 
@@ -46,7 +46,7 @@ The API receives the MAC and optional IPv4 address; it does not discover the MAC
 
 ARP applies to local IPv4 neighbors. The gateway MAC is not a remote host's MAC. A machine's own MAC may require local interface metadata because its own address need not appear in the ARP cache. Automatic address selection must account for multiple interfaces and VPNs. IPv6 neighbor discovery is outside the initial scope.
 
-The current vendor adapter source uses a fixed `https://api.macvendors.com/` host with bounded request time and response size. Live-provider compatibility has not yet been verified. Availability and rate limits belong to the external service; deterministic tests should stub that boundary.
+The vendor adapter uses a fixed `https://api.macvendors.com/` host with bounded request time and response size. A live lookup and persisted response were verified separately from deterministic tests, which stub that boundary. Availability and rate limits belong to the external service.
 
 ## Termination and audit lifecycle
 
@@ -66,9 +66,9 @@ flowchart TD
   Pending -->|Retry same event only| Upload
 ```
 
-This is the intended recovery flow; storage implementation and restart behavior require integration evidence. A retry is an HTTP delivery operation, never a second OS termination. A stable UUID makes retries idempotent. Rails returns an existing identical event with `200`, but rejects reuse of the ID with different attributes with `409 event_conflict`.
+The outbox flushes each event to a temporary file before renaming it into the delivery queue, recovers interrupted writes on restart, and preserves corrupt files for investigation. Storage failures are displayed separately from network failures; an event held only in memory is never labeled saved locally. File-recovery and retry behavior have automated coverage. A retry is an HTTP delivery operation, never a second OS termination. A stable UUID makes retries idempotent. Rails returns an existing identical event with `200`, but rejects reuse of the ID with different attributes with `409 event_conflict`. There is an unavoidable crash gap between observing exit and durably writing the event; this is not an exactly-once OS-and-database transaction.
 
-Process identity includes start/creation information because PIDs can be reused. Windows is intended to validate and terminate through the same process handle. macOS PID-based signaling retains a race after identity revalidation; it must not be described as race-free. Confirmation should identify the selected process, and reported success requires observed exit. Reject nonpositive and self PIDs, respect current-user permissions, and do not elevate or implicitly terminate trees. Platform implementations and native verification remain pending.
+Process identity includes start/creation information because PIDs can be reused. Windows validates creation time and terminates through the same process handle. macOS sends SIGTERM after identity revalidation, retaining a PID race and the one-second resolution of the `ps` start timestamp. Confirmation identifies the selected process, and reported success requires observed exit. The adapters reject nonpositive and self PIDs, respect current-user permissions, and do not elevate or implicitly terminate trees. Native tests on both platforms terminate only harness-created children.
 
 ## Data and operating limits
 
@@ -76,4 +76,4 @@ The API's SQLite database persists accepted lookups and confirmed-exit audit rep
 
 No authentication is configured. Loopback binding is the development boundary; remote exposure needs additional design. Vendor requests disclose the submitted MAC to the external provider. IPs, MACs, process names, and timestamps may be sensitive: use non-sensitive data for public demonstrations and keep local databases, logs, and credentials out of source control.
 
-Both desktop platforms are targets, not a verification claim. The process manager is planned as an unsandboxed desktop utility; macOS entitlements and Finder-launched release behavior require review. Development artifacts are intended to be unsigned. Code signing, notarization, store submission, and a bundled API installer are outside the current delivery scope.
+Both desktop platforms have native CI tests and release builds. The macOS apps run without App Sandbox so local OS discovery and process control remain available. The release bundles have no verified Developer ID signing or notarization; signing, store submission, and a bundled API installer are outside the delivery scope. Interactive Finder-launched and Windows GUI testing is not claimed; see the verification record.

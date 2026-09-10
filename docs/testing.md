@@ -1,118 +1,125 @@
-# Testing and delivery evidence
+# Testing and verification
 
-This page separates commands to run from results supplied during development. The main-owned [verification results](verification-results.md) are the authoritative current evidence record, including integration findings and retests. A build is not manual UI verification; a synthetic widget render is not live OS integration. Pending checks must not be converted into passing claims without their actual output and context.
+[Verification results](verification-results.md) records the checks actually performed, their limits, and the tested revisions. The [CI workflow](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml) runs API checks, client tests, native builds, and packaging.
 
-## Current evidence
+## Run the test suites
 
-| Area | Status | Evidence / remaining work |
-| --- | --- | --- |
-| `desktop_core` static analysis | Passed, reported by main agent | No analysis issues; see [verification results](verification-results.md) |
-| `desktop_core` unit tests | 7 passed, reported by main agent | HTTP behavior and desktop layout/navigation; see [verification results](verification-results.md) |
-| Rails request / model / vendor tests | 39 tests, 438 assertions passed, reported by API worker via main | Main-agent independent rechecks pending |
-| Rails lint / security | Clean, reported by API worker via main | Main-agent independent rechecks pending |
-| Live JSON POST correction | Worker fix and raw POST regression reported | `json < 3`, locked 2.21.2; independent live retest pending |
-| Audit timestamp precision correction | In progress | Normalize at event creation and test millisecond API response acknowledgement |
-| API container HTTP / restart persistence | CI job configured; execution pending | Requires successful `api-container` run; no Docker verification claim |
-| Network Lookup analysis / tests | Pending | App implementation in progress |
-| Process Manager analysis / tests | Pending | App implementation in progress |
-| macOS native builds, both apps | Pending | Record native build and packaged artifact evidence |
-| Windows native builds, both apps | Pending | Record Windows-runner build and artifact evidence |
-| Native OS adapter checks | Pending | Separate macOS and Windows results |
-| Real client/API integration | Pending | Verify history persistence and failure/recovery paths |
-| macOS manual UI inspection | Pending | Main agent will inspect live native applications |
-| Windows manual UI inspection | Not established | Do not infer it from CI, parser tests, or screenshots |
-| Public UI previews | Pending | Production Flutter widgets with injected synthetic sample data |
-| Original SVG banner | Rendered and visually inspected by main agent | `rsvg-convert` render; SVG XML validation also passed |
-| Clean-clone macOS / Windows / Docker setup | Pending | Execute documented setup in the relevant environment |
-| CI artifacts / release downloads | Pending | Supply successful run URLs and actual downloadable files |
-
-## Deterministic checks
-
-From `api/`, using Ruby 4.0.2:
+After setting up the pinned toolchains and dependencies:
 
 ```sh
-bundle install
-RAILS_ENV=test bin/rails db:prepare
+# Repository root, macOS or a Linux API checkout.
+bash scripts/dev.sh check
+
+# API only.
+bash scripts/dev.sh check api
+
+# Flutter only.
+bash scripts/dev.sh check flutter
+```
+
+On Windows with Rails in WSL2 or Docker, use `./scripts/dev.ps1 check flutter` in PowerShell and run the API checks in the Linux checkout. The scripts enforce the checked-in Flutter lockfiles.
+
+Individual package commands:
+
+```sh
+# Inside api/
+RAILS_ENV=test bundle exec rails db:prepare
 bundle exec rails test
+
+# Inside either app or packages/desktop_core/
+flutter pub get --enforce-lockfile
+flutter analyze --no-pub
+flutter test --no-pub
 ```
 
-The Rails suite should cover request validation, normalization, persistence, pagination order, JSON/status contracts, timestamp handling, duplicate event IDs, and conflicts. Vendor service tests should stub resolved, unknown, malformed, unavailable, timed-out, and rate-limited responses. They should not require the external provider to be online.
+The API suite covers validation, MAC normalization, persisted outcomes, history ordering, timestamps, event deduplication/conflicts, and upstream errors. WebMock disables external network calls in that suite. Full API checks also run RuboCop, Brakeman, and a dependency advisory audit.
 
-The full check scripts additionally run RuboCop, Brakeman, and the dependency advisory audit. From the repository root, use `bash scripts/dev.sh check` on macOS, or `./scripts/dev.ps1 check flutter` on Windows when Ruby runs in WSL2. In the WSL checkout, `bash scripts/dev.sh check api` covers Rails. Complete setup first. For the container route, API tests can run with `docker compose run --rm -e RAILS_ENV=test api bundle exec rails db:prepare test`.
+Client tests cover state transitions, stale results, sorting/search, refresh scheduling, confirmation, identity changes, outbox persistence/recovery, and error presentation. Windows and macOS parser fixtures run on every host.
 
-Run the following from **each** of `packages/desktop_core/`, `apps/network_lookup/`, and `apps/process_manager/`:
+## Native and HTTP integration
+
+Default app tests include `test/native_smoke_test.dart` on Windows and macOS, skipping it on Linux:
+
+- Network Lookup reads real interfaces and neighbor-cache entries and verifies canonical identities and own-IP metadata. It performs no probes or scans and logs no addresses.
+- Process Manager creates its own disposable `sleep` or PowerShell child, finds its identity, terminates that child through the actual adapter, and observes exit. It never selects an existing user process.
+
+With Rails running at the configured API URL, run from either app directory:
 
 ```sh
-flutter pub get
-flutter analyze
-flutter test
+HUDU_API_SMOKE=true flutter test test/api_smoke_test.dart
 ```
 
-Client coverage should exercise state transitions, stale async results, empty/error states, sorting/search, refresh overlap, confirmation, identity changes, unconfirmed exits, and audit retry. Adapter fixtures should include spaces/Unicode in process names, incomplete ARP entries, and multiple interfaces. These are acceptance targets; the table above is the source of reported results.
-
-## Native and integration checks
-
-OS termination tests may terminate **only disposable child processes created by their own harness**. Record the child identity and ensure cleanup cannot target an unrelated user process. Do not test termination by selecting an arbitrary application or by copying a PID from a screenshot.
-
-The integration review should establish:
-
-1. Each real desktop app reaches Rails on the configured host and port.
-2. Lookup success, unknown-vendor, provider failure, and local discovery failure remain distinct; ARP misses create no API record.
-3. Confirmed process exit produces the expected event; permission denial, stale identity, or an unconfirmed exit does not claim success.
-4. After an API outage, a pending audit survives app restart and retries with the same UUID and original occurrence time. Duplicate delivery adds no duplicate history and performs no OS action.
-5. Both histories survive an API restart. Pagination ordering matches [contracts.md](contracts.md).
-6. Each native app handles resize, keyboard focus, loading, errors, and recovery. Inspect macOS release launch from Finder separately from `flutter run`.
-
-Record live vendor smoke checks separately from deterministic test results, including the date and outcome. Do not publish private host data as evidence.
-
-## Release builds
-
-From each app directory on a **macOS host**:
-
-```sh
-flutter pub get
-flutter build macos --release --dart-define=API_BASE_URL=http://127.0.0.1:3000
-```
-
-From each app directory on a **Windows host**, in PowerShell:
+PowerShell equivalent:
 
 ```powershell
-flutter pub get
-flutter build windows --release --dart-define=API_BASE_URL=http://127.0.0.1:3000
+$env:HUDU_API_SMOKE = 'true'
+flutter test test/api_smoke_test.dart
+Remove-Item Env:HUDU_API_SMOKE
 ```
 
-The intended output matrix is Network Lookup/macOS, Process Manager/macOS, Network Lookup/Windows, and Process Manager/Windows. Verify all four independently. Do not claim a Windows build from a macOS Flutter command.
+The network HTTP smoke reads history and checks a rejected malformed request without depending on the vendor service. The process HTTP smoke terminates a new harness child, sends its event through the real repository, retries the same event, and verifies one history row.
 
-macOS builds normally produce an `.app` under the app's `build/macos/Build/Products/Release/` directory. Windows produces a release bundle under `build/windows/<architecture>/runner/Release/`; retain the executable, all required DLLs, and the `data/` directory. The final architecture, bundle names, and CI archive names must be taken from successful build outputs.
-
-The desktop binaries require a separately running API. Planned downloads are unsigned development artifacts; signing and notarization are not verified. [GitHub Actions](https://github.com/ConnorDykes/Hudu-Project/actions) is the CI destination and [Releases](https://github.com/ConnorDykes/Hudu-Project/releases) the release destination. No available artifact is claimed until an actual run or release link is supplied.
-
-After successful builds, the packaging scripts archive the complete bundles. From the repository root:
+For a separate live vendor check, from Network Lookup:
 
 ```sh
-# macOS; choose a fresh output directory.
+HUDU_API_SMOKE=true HUDU_LIVE_VENDOR=true flutter test test/api_smoke_test.dart
+```
+
+This opt-in check calls the vendor provider with synthetic sample data and creates a persisted lookup. Provider errors/unknown results are distinct from an API transport failure.
+
+## CI matrix
+
+| Check | Environment |
+| --- | --- |
+| Rails tests, lint, security/dependency checks | Ubuntu |
+| Docker Compose startup, JSON POST, idempotent retry, persistence after restart | Ubuntu |
+| Shared package and both Flutter suites | Ubuntu |
+| Native adapter tests and release builds for each app | Windows and macOS |
+| Real Flutter repository-to-Rails integration | macOS |
+| Complete app archive creation and upload | Windows and macOS |
+
+The container test uses a synthetic audit fixture and does not terminate any process. Desktop jobs package the complete application: macOS bundles retain framework symlinks, and Windows bundles include the executable, Flutter/plugin DLLs, and data directory. Artifacts are retained for 14 days; published releases provide durable download links.
+
+Documentation-only pushes do not rebuild the binaries. Pull requests and manual workflow dispatches still run the workflow. A release's notes identify the code revision used for its artifacts.
+
+## Build and package locally
+
+From each app directory, on its native host:
+
+```sh
+flutter build macos --release
+# Windows:
+flutter build windows --release
+```
+
+From the repository root, choose a fresh output directory:
+
+```sh
 bash scripts/package-macos.sh network_lookup /tmp/hudu-release
 bash scripts/package-macos.sh process_manager /tmp/hudu-release
 ```
 
 ```powershell
-# Windows; choose a fresh output directory.
 ./scripts/package-windows.ps1 -App network_lookup -OutputDirectory "$env:TEMP/hudu-release"
 ./scripts/package-windows.ps1 -App process_manager -OutputDirectory "$env:TEMP/hudu-release"
 ```
 
-Archive names follow `hudu-<app>-macos-<architecture>.zip` or `hudu-<app>-windows-<architecture>.zip`. Windows packaging defaults to x64; use its `-Architecture` parameter only for a matching actual build. Follow the [script reference](../scripts/README.md) for the required Windows Visual C++ runtime and extraction instructions. Both packagers refuse to overwrite an existing archive.
+The macOS packager inspects the executable and labels a dual Intel/Apple Silicon build `universal`. Windows packaging defaults to x64. Both refuse to overwrite an existing archive. Windows requires the [Visual C++ runtime described in the script reference](../scripts/README.md); retain the entire extracted bundle.
 
-The checked-in CI workflow declares Rails checks, an API container HTTP/persistence job, Flutter checks for all three packages, and four native app/platform build jobs. The `api-container` job builds Compose, creates a synthetic audit record over HTTP expecting `201`, restarts the API, and resubmits the same payload expecting `200` and an identical response. This exercises API persistence and retry behavior without terminating any process. Docker execution remains unverified until a successful CI run is supplied.
-
-Uploaded artifact names include the app, platform, runner architecture, and commit SHA; retention is configured for 14 days. Download an artifact from a successful run and extract its enclosed release zip. Release publication is a separate main-agent step. This describes workflow configuration, not evidence that a run has succeeded.
+These are development artifacts, without verified Developer ID signing/notarization or store publication. The Rails API remains a separate service.
 
 ## Screenshot provenance
 
-Planned public previews use real production Flutter widgets rendered through golden tests with injected synthetic sample data. Use the caption **“Actual Flutter UI rendered with synthetic sample data”**. These previews show implemented UI rendering; they do not demonstrate live network discovery, real process termination, or Windows manual UI testing.
+The README previews are the actual production Flutter widgets rendered with injected synthetic records, a bundled OFL Inter font, and Material icons. They contain no private machine/network data. They demonstrate implemented UI rendering, not live OS operation or Windows manual testing.
 
-Reserve `docs/assets/network-lookup.png` and `docs/assets/process-manager.png` for the supplied renders. The original `banner.svg` is illustrative project branding. Before publishing previews, inspect them for layout and accidental personal data; record the originating test and app revision. Main-agent live native-app inspection is a separate evidence row above.
+From each app, on the rendering host:
 
-## Final evidence handoff
+```sh
+UPDATE_GOLDENS=true flutter test --update-goldens test/screenshots_test.dart
+# Compare without updating:
+UPDATE_GOLDENS=true flutter test test/screenshots_test.dart
+```
 
-For each completed check, record the command, platform/toolchain, revision, result, and available log or CI URL in [verification results](verification-results.md). For artifacts, add the actual download URL and architecture. For manual UI work, describe the actions actually exercised and any untested platform. Update this page's summary and README only after the main agent supplies evidence; passing shared-package tests do not imply passing application integration.
+Outputs are `test/goldens/network-lookup.png` and `test/goldens/process-manager.png`, copied into `docs/assets/` after visual inspection. Golden tests are opt-in to avoid cross-platform rasterization differences.
+
+Interactive app inspection is recorded separately in [verification results](verification-results.md). Native test success or a compiled binary is not described as manual UI verification.

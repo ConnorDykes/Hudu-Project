@@ -1,52 +1,48 @@
 # AI-assisted development
 
-This project uses a main coordinating agent and subagents with disjoint file ownership. The log records supplied facts and visible work; it does not invent review conversations, human corrections, or test outcomes. The project implements both take-home options at the user's request.
+Both take-home options were implemented at Connor's request using a main orchestration agent and scoped implementation/review subagents. This log describes actual work on September 10, 2026; it does not imply human review or independent authorship.
 
-## Responsibility split
+## Delegation and integration
 
-| Owner | Scope |
+| Owner | Responsibility |
 | --- | --- |
-| Main agent | Canonical contracts, shared package, root configuration, integration, final review, Git operations |
-| API worker | `api/` implementation and API checks |
-| Network Lookup worker | `apps/network_lookup/` implementation and app checks |
-| Process Manager worker | `apps/process_manager/` implementation and app checks |
-| Build worker | Shell/PowerShell tooling, CI and packaging within its assigned scope |
-| Documentation worker | README, architecture/API/development/testing/AI notes, and original visual assets |
+| Main orchestrator | Requirements, canonical contracts, shared Flutter package, toolchains, integration tests, review, GitHub delivery |
+| API worker | Rails endpoints, vendor service, SQLite persistence, API tests |
+| Network worker | Flutter lookup UI, macOS/Windows network adapters, tests and preview |
+| Process worker | Flutter process UI, native adapters, audit outbox, tests and preview |
+| Build worker | Bash/PowerShell scripts, native CI matrix, archive packaging |
+| Documentation worker | README, architecture/API/setup documentation, original SVG banner |
+| Independent API/shared/build reviewer | Read-only source review and separate API checks |
+| Independent app reviewer | Read-only app review and targeted re-review of corrections |
 
-Workers must report changed paths, checks actually run, and remaining issues. Cross-scope changes go through the main agent. Documentation does not alter the implementation plan or canonical contracts. Workers do not commit or push.
+The main agent established contracts before parallel app implementation. Workers had disjoint directory ownership, returned concrete test evidence, and did not commit or push. Cross-cutting changes went through the main agent. The main agent inspected the changes, reran meaningful checks, tested real HTTP boundaries, and integrated the work.
 
-## Development record · 2026-09-10
+## Review findings and corrections
 
-| Event | Basis / status |
+| Finding | Correction and evidence |
 | --- | --- |
-| Both options assigned to independent apps, sharing `desktop_core` and a Rails API | Implementation plan and canonical contracts |
-| Public repository created at `ConnorDykes/Hudu-Project` | Reported by main agent in the documentation handoff |
-| Flutter 3.47.2, Ruby 4.0.2, Rails 8.1.3.1 selected | Handoff and version declarations inspected in source |
-| API, app, build, and documentation scopes delegated | Main-agent handoff; app workers subsequently reported started |
-| Shared package analysis and seven tests pass | Reported by main agent; not independently rerun by documentation worker |
-| Documentation drafted against plan, contracts, and available source | Documentation worker read root instructions, plan, contracts, API source, and shared transport |
-| Original SVG banner authored | Vector source created directly; no corporate logo, generated screenshot, or copied assignment artwork |
-| Public preview approach clarified | Main agent specified production-widget golden renders with injected synthetic sample data; live native inspection remains separate |
-| Setup and packaging documentation reconciled | Documentation worker inspected Bash/PowerShell scripts, Compose, Dockerfile, and CI source after the build worker supplied them; execution remains pending |
-| Banner visually reviewed | Main agent reported rendering with `rsvg-convert` and inspecting the result; documentation worker validated the SVG XML |
-| API worker completed its checks | Main-agent handoff reports 39 passing tests, 438 assertions, and clean lint/security checks; main-agent independent rechecks remain pending |
-| Live JSON request compatibility corrected | Main review found valid JSON receiving HTTP 400; backend constrained `json < 3`, locked 2.21.2, and added a raw POST regression; independent live retest remains pending |
-| Audit timestamp precision mismatch found | Main review caught client microsecond timestamps compared against API millisecond responses; process worker is normalizing timestamps at event creation and adding a regression |
-| Container HTTP verification added to CI | Inspected `api-container` job builds Compose, checks create `201`, restarts the API, and checks identical retry `200` with the same response; execution evidence remains pending |
-| MAC validation contract clarified | Current canonical contract accepts syntactically valid 48-bit addresses and directs discovery adapters to ignore incomplete/zero entries |
+| A valid live JSON POST returned 400 although health worked | Rails 8.1.3.1's positional parser options conflicted with JSON 3. The API worker constrained JSON below 3, locked 2.21.2, and added a raw-request regression. Main live retest returned 201 with persisted vendor data. |
+| Client microsecond timestamps could disagree with millisecond API acknowledgments | Normalize event creation to milliseconds and retain stable event identity/time for retries. Regression tests and real repository-to-Rails tests pass. |
+| A delivery-triggered history refresh could be dropped behind an older request | The app reviewer identified the interleaving. The process worker serialized requests and queued a follow-up refresh; a controlled delayed-response regression passes. Reviewer re-review accepted the fix. |
+| An older audit upload could clear a newer event's storage warning | Evaluate the live queue before clearing the warning. A delayed-upload regression proves a newly failed disk write remains visible and blocks further termination. Reviewer re-review accepted the fix. |
+| The UI could label a memory-only event as saved locally | Prioritize the storage warning, explicitly say the event is only in memory, and add widget regressions both with and without a simultaneous network error. |
+| Preview fonts/icons differed from intended production rendering | Bundle the OFL Inter font and load both it and Material icons in golden tests. Main visually inspected the resulting production-widget previews. |
+| Runner CPU labels need not match a universal macOS binary | Inspect Mach-O slices during packaging and label dual-architecture archives universal. Main inspected app and Dart framework architectures. |
+| Windows native network smoke exceeded the original eight-second watchdog | Reopened the network worker's scope. Windows discovery now shares one 30-second budget including startup, with explicit loading text and no retries. Main independently passed deadline, controller, widget, native, and real API tests. |
+| Late-start timeout cleanup could retain unread output pipes | The independent reviewer identified the resource edge case. The worker added cancellation of both pipes, buffered-output/refused-termination regressions, and truthful timeout wording. Targeted re-review accepted the correction. |
 
-The lookup uses POST because it persists an attempt; GET reads history. This is an explicit design decision in the plan, not a correction invented after review. Process-event retries preserve event identity and occurrence time to separate confirmed local termination from network delivery.
+The independent API/shared/build reviewer returned no actionable findings. The app review's two concurrency findings and subsequent timeout-cleanup finding were corrected before final delivery. Test results are not substituted for review: both source inspection and runtime checks were performed.
 
-## Corrections from main-agent review
+## Verification and public delivery
 
-The live API accepted health requests but returned `400` for a syntactically valid JSON POST. The reported cause was Rails 8.1.3.1's positional JSON options being incompatible with JSON 3. The API worker constrained the dependency to `json < 3`, locked version 2.21.2, and added a raw JSON POST regression. The dependency constraint and lock were inspected in source; the reported 39 tests and 438 assertions are worker results, not a completed independent live retest.
+The main agent independently ran API tests, lint/security checks, Flutter analysis/tests, real vendor requests, idempotent audit requests, and native macOS adapter tests. Process tests use disposable harness children only. A fresh public clone passed the documented setup/check script and a macOS release build; after the review fixes, the updated clean clone passed both final app suites.
 
-Main review also identified a mismatch between microsecond-precision timestamps held by the process client and millisecond-precision timestamps returned by the API. Comparing them without consistent precision could prevent a valid audit response from being acknowledged. The process worker was assigned to normalize the occurrence timestamp at event creation and add a regression. Completion and independent verification of that correction remain pending.
+GitHub Actions additionally runs Linux API/client checks, Docker HTTP/persistence checks, native macOS and Windows tests, and all four release builds. Exact counts, tested revision, workflow evidence, and verification limits are recorded in [verification results](verification-results.md). Reproducible commands are in [testing](testing.md).
 
-To exercise the HTTP boundary in a container, the main agent added an `api-container` CI job. It builds and starts Compose, posts a synthetic process event expecting `201`, restarts the API, and resends the same event expecting `200` and an identical response. This checks request parsing, duplicate handling, and persistence across restart without terminating an OS process. The job's presence is configuration evidence only; Docker support is not marked verified until a successful CI run is supplied.
+The README uses original SVG project artwork and real production-widget renders with synthetic data. No private machine/network data or copied corporate artwork was published.
 
-## Review and evidence still required
+## Deliberate limits
 
-Main-agent integration review is in progress; independent rerun results, native builds, live app inspection, clean-clone setup, and final artifacts remain pending. The corrections above came from main-agent review; no human correction history or separate independent reviewer conclusion has been supplied. Add actual findings and their resolutions when available, with a source revision or check result where practical. The main-owned [verification results](verification-results.md) records current integration findings; independent live verification of the JSON correction remains pending.
+The Mac was locked during attempted interactive inspection; this was reported and no lock bypass was attempted. Manual native GUI verification is not claimed. Windows/WSL2 developer networking was documented but not manually exercised. The release contains development bundles, not signed/notarized installers, and the Rails API runs separately.
 
-Setup/compose commands were reconciled with available source and need a final drift check if build tooling changes. [testing.md](testing.md) holds the check runbook and screenshot provenance requirements. Canonical API behavior remains in [contracts.md](contracts.md).
+The public vendor service is an external dependency. Process exit and local audit persistence cannot form a single transaction: a crash in that gap can lose an event. macOS identity revalidation reduces but cannot eliminate PID reuse races. These limits are documented rather than hidden behind a success message.

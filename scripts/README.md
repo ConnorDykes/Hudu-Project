@@ -114,10 +114,10 @@ runner architecture, and commit names, and are retained for 14 days. CI requires
 committed `pubspec.lock` files for all three Flutter packages. Download the
 artifact and extract its enclosed release zip. GitHub release attachment is a
 separate main-agent operation; this workflow has read-only repository access.
-The native jobs discover each app's `test/native_smoke_test.dart` through the
-normal `flutter test` invocation once those harnesses are present. Screenshot
+The native jobs run each app's `test/native_smoke_test.dart` through the
+normal `flutter test` invocation. These tests run on macOS and Windows and skip
+on Linux. Screenshot
 generation in `test/screenshots_test.dart` is opt-in through `UPDATE_GOLDENS`,
 which CI does not set, to avoid comparing platform-specific font rendering.
-Main must verify the workers' skip conditions before the first workflow run.
 Passing unit tests alone is not evidence of native smoke or interactive UI
 verification.

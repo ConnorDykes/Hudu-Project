@@ -1,6 +1,6 @@
 # API reference
 
-The canonical definition is [contracts.md](contracts.md). This reference explains that contract; examples are synthetic payloads, not captured runtime results. API execution and client integration verification remain pending.
+The canonical definition is [contracts.md](contracts.md). This reference explains that contract; examples are synthetic payloads, not captured runtime results. Completed API and client integration checks are recorded in [verification results](verification-results.md).
 
 Base URL: `http://127.0.0.1:3000`. Use JSON request bodies and `Content-Type: application/json`. There is no authentication. Timestamps in responses are UTC ISO 8601. The service handles vendor lookup and persistence only; it has no endpoint to inspect or terminate OS processes.
 
