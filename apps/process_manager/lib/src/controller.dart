@@ -137,6 +137,8 @@ class ManagerController extends Notifier<ManagerState> {
   late AuditOutbox _outbox;
   late DateTime Function() _now;
   Future<void>? _initialization;
+  Completer<void>? _historyRefresh;
+  bool _historyRefreshQueued = false;
   @override
   ManagerState build() {
     _adapter = ref.read(processAdapterProvider);
@@ -198,20 +200,34 @@ class ManagerController extends Notifier<ManagerState> {
   }
 
   Future<void> refreshHistory() async {
-    if (state.historyLoading) return;
-    state = state.copy(historyLoading: true, clearHistoryError: true);
+    final active = _historyRefresh;
+    if (active != null) {
+      // A delivery may have happened after the active GET took its snapshot.
+      // Coalesce callers into one follow-up GET, and await the whole drain.
+      _historyRefreshQueued = true;
+      return active.future;
+    }
+    final completion = Completer<void>();
+    _historyRefresh = completion;
     try {
-      final history = await _audit.history();
-      if (ref.mounted) {
-        state = state.copy(history: history, historyLoading: false);
-      }
-    } catch (error) {
-      if (ref.mounted) {
-        state = state.copy(
-          historyLoading: false,
-          historyError: 'Audit history unavailable. ${_message(error)}',
-        );
-      }
+      do {
+        _historyRefreshQueued = false;
+        state = state.copy(historyLoading: true, clearHistoryError: true);
+        try {
+          final history = await _audit.history();
+          if (!ref.mounted) return;
+          state = state.copy(history: history);
+        } catch (error) {
+          if (!ref.mounted) return;
+          state = state.copy(
+            historyError: 'Audit history unavailable. ${_message(error)}',
+          );
+        }
+      } while (_historyRefreshQueued);
+    } finally {
+      _historyRefresh = null;
+      if (ref.mounted) state = state.copy(historyLoading: false);
+      completion.complete();
     }
   }
 
@@ -328,7 +344,12 @@ class ManagerController extends Notifier<ManagerState> {
               .toList(),
         );
       }
-      if (ref.mounted) state = state.copy(clearStorageError: true);
+      // A newer termination can append a memory-only event while this retry's
+      // snapshot is in flight. Keep the storage warning until the live queue
+      // is fully delivered, including any events added during this retry.
+      if (ref.mounted && state.pending.isEmpty) {
+        state = state.copy(clearStorageError: true);
+      }
     } catch (error) {
       if (ref.mounted) {
         state = state.copy(auditError: 'Audit pending. ${_message(error)}');

@@ -49,11 +49,14 @@ class FakeProcesses implements ProcessAdapter {
 
 class FakeAudit implements AuditRepository {
   Object? error;
+  Future<List<AuditEvent>> Function()? onHistory;
+  Future<void> Function(AuditEvent)? onSend;
   final List<AuditEvent> sent = [];
   List<AuditEvent> records = [];
   @override
   Future<List<AuditEvent>> history() async {
     if (error != null) throw error!;
+    if (onHistory != null) return onHistory!();
     return [...records];
   }
 
@@ -61,6 +64,7 @@ class FakeAudit implements AuditRepository {
   Future<void> send(AuditEvent event) async {
     sent.add(event);
     if (error != null) throw error!;
+    if (onSend != null) await onSend!(event);
     records = [event, ...records.where((e) => e.eventId != event.eventId)];
   }
 }

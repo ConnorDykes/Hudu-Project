@@ -126,7 +126,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '${state.pending.length} confirmed ${state.pending.length == 1 ? 'exit' : 'exits'} · audit pending\n${state.auditError ?? (state.storageError == null ? 'Saved locally. Delivery retries automatically every 30 seconds.' : 'Not saved to disk. Keep this app open and restore storage before retrying.')}',
+              '${state.pending.length} confirmed ${state.pending.length == 1 ? 'exit' : 'exits'} · audit pending\n${state.storageError != null ? 'Some events are only in memory. Keep app open and retry.' : state.auditError ?? 'Saved locally. Delivery retries automatically every 30 seconds.'}',
               style: const TextStyle(fontSize: 12, color: Color(0xFFF0CA80)),
             ),
           ),

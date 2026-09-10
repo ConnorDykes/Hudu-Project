@@ -7,10 +7,20 @@ import 'package:process_manager/src/controller.dart';
 import 'support/fakes.dart';
 import 'support/fonts.dart';
 
+class _SnapshotController extends ManagerController {
+  _SnapshotController(this.snapshot);
+  final ManagerState snapshot;
+  @override
+  ManagerState build() => snapshot;
+  @override
+  Future<void> initialize() async {}
+}
+
 Future<void> renderApp(
   WidgetTester tester, {
   FakeProcesses? processes,
   FakeAudit? audit,
+  ManagerState? snapshot,
   Size size = const Size(1280, 820),
 }) async {
   await loadTestFonts();
@@ -21,6 +31,8 @@ Future<void> renderApp(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (snapshot != null)
+          managerProvider.overrideWith(() => _SnapshotController(snapshot)),
         processAdapterProvider.overrideWithValue(processes ?? FakeProcesses()),
         auditRepositoryProvider.overrideWithValue(audit ?? FakeAudit()),
         outboxProvider.overrideWithValue(MemoryOutbox()),
@@ -32,6 +44,41 @@ Future<void> renderApp(
 }
 
 void main() {
+  for (final auditError in [null, 'Audit pending. API unavailable.']) {
+    testWidgets(
+      'storage write failure never claims saved locally (auditError: $auditError)',
+      (tester) async {
+        await renderApp(
+          tester,
+          snapshot: ManagerState(
+            ready: true,
+            processes: syntheticProcesses,
+            selected: syntheticProcesses.first,
+            pending: [sampleEvent()],
+            storageError: 'Process terminated, but its audit could not be saved to disk. Keep this app open and retry delivery.',
+            auditError: auditError,
+          ),
+          size: const Size(960, 680),
+        );
+        expect(
+          find.textContaining(
+            'Some events are only in memory. Keep app open and retry.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('could not be saved to disk'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Saved locally'), findsNothing);
+        final terminate = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Terminate process'),
+        );
+        expect(terminate.onPressed, isNull);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets('configurable auto-refresh runs and stops without overlapping', (
     tester,
   ) async {
