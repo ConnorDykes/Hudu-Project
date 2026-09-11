@@ -154,30 +154,17 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
               label: const Text('Refresh'),
             ),
           ],
-          footer: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StatusPill(
-                state.historyLoading
-                    ? 'Checking API'
-                    : state.historyError != null
-                    ? 'API unreachable'
-                    : 'API connected',
-                color: state.historyLoading
-                    ? c.textTertiary
-                    : state.historyError != null
-                    ? c.danger
-                    : c.success,
-              ),
-              const SizedBox(height: 4),
-              Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Text(
-                  'Current user · no elevation',
-                  style: TextStyle(fontSize: 11, color: c.textTertiary),
-                ),
-              ),
-            ],
+          footer: StatusPill(
+            state.historyLoading
+                ? 'Checking API'
+                : state.historyError != null
+                ? 'API unreachable'
+                : 'API connected',
+            color: state.historyLoading
+                ? c.textTertiary
+                : state.historyError != null
+                ? c.danger
+                : c.success,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -636,16 +623,11 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Unsaved work in this process may be lost. Only this process is '
-                'targeted, using your current permissions.',
-              ),
-              const SizedBox(height: 8),
               Text(
                 Platform.isWindows
-                    ? 'Windows terminates the process through the same handle used to verify its creation time.'
-                    : 'macOS sends SIGTERM and waits up to 4 seconds for exit. PID reuse between verification and signaling cannot be fully prevented; creation times have one-second precision.',
-                style: Theme.of(context).textTheme.bodySmall,
+                    ? 'Unsaved work in this process may be lost. Windows ends it immediately.'
+                    : 'Unsaved work in this process may be lost. macOS sends SIGTERM and waits up to 4 seconds for it to exit.',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
           ),

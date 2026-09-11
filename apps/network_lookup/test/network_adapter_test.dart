@@ -88,10 +88,6 @@ void main() {
       throwsA(isA<NetworkFailure>()),
     );
     expect(
-      selectResolution('192.168.1.10', [], entries, interfaceName: 'en0').mac,
-      '00:1B:63:04:05:E6',
-    );
-    expect(
       () => selectResolution('8.8.8.8', [], entries),
       throwsA(
         isA<NetworkFailure>().having(

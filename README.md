@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **90 Flutter tests and 41 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **90 Flutter tests and 40 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 
@@ -25,7 +25,7 @@ Both applications and the API are implemented, with native macOS and Windows CI 
 | Main workflow | Send the discovered MAC to Rails for vendor lookup | Confirm the selected process identity, request termination, observe exit |
 | Persisted history | Resolved, unknown-vendor, and provider-failure outcomes | Confirmed termination events with original occurrence time |
 | Failure handling | Distinguish ARP miss, unknown vendor, API outage, and provider failure | Distinguish access denial, stale identity, unconfirmed exit, and audit failure |
-| Convenience | Detect a primary active IPv4 address where available; Cmd/Ctrl+L focuses the address field | Configurable auto-refresh; keyboard search, selection, and refresh; durable audit retry without repeating termination |
+| Convenience | Detect and use the primary active IPv4 address | Configurable auto-refresh; keyboard search, selection, and refresh; durable audit retry without repeating termination |
 
 ## Architecture
 
@@ -147,7 +147,7 @@ Start Rails before using API-backed features. macOS builds require macOS 12 or l
 ## Engineering choices and limits
 
 - **Local IPv4 discovery:** ARP cannot identify a remote host's MAC across routers. An absent cache entry does not prove a device is offline. IPv6 discovery is outside the initial scope; VPNs and multiple adapters can make automatic address selection ambiguous.
-- **Explicit writes:** `POST /lookups` performs and persists a lookup. The assignment's GET example is adapted because this operation creates history; `GET /lookups` reads history. See [API reference](docs/api.md).
+- **Lookup endpoint:** `GET /lookups?mac=...` performs a lookup exactly as the brief illustrates; the desktop client uses the equivalent `POST /lookups` because the operation creates a history record. Plain `GET /lookups` reads history. See [API reference](docs/api.md).
 - **Truthful process outcomes:** requesting termination is distinct from observing exit. Permissions and platform semantics apply. macOS PID-based signaling retains a race between identity validation and signaling.
 - **Independent audit delivery:** confirmed exits are queued locally with a stable event ID. Delivery retries never terminate a process again. Recovery and retry behavior have automated tests; disk-write failures are explicit, and a crash between exit and durable persistence can still lose an event.
 - **Local service:** the API has no authentication. Bind it to loopback; this project does not provide a public hosted API, signed installers, notarization, or an App Store distribution claim.

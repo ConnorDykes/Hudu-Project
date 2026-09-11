@@ -41,7 +41,7 @@ Future<void> main() async {
   if (own != null) {
     final resolution = await timedRead(
       'own-IP metadata',
-      () => adapter.resolve(own.ip, interfaceName: own.name),
+      () => adapter.resolve(own.ip),
     );
     check(
       resolution.isOwnInterface && resolution.mac == own.mac,

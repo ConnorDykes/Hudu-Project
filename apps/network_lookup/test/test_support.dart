@@ -34,18 +34,15 @@ final exampleHistory = [
     createdAt: DateTime(2026, 9, 10, 14, 18),
   ),
 ];
-const exampleInterfaces = InterfaceSnapshot(
-  [
-    LocalInterface(
-      name: 'en0',
-      ip: '192.168.1.8',
-      mac: '02:12:34:56:78:90',
-      primary: true,
-    ),
-    LocalInterface(name: 'en5', ip: '10.20.0.8', mac: '02:12:34:56:78:92'),
-  ],
-  notice: 'Default-route interface suggested. Choose another for a different network.',
-);
+const exampleInterfaces = InterfaceSnapshot([
+  LocalInterface(
+    name: 'en0',
+    ip: '192.168.1.8',
+    mac: '02:12:34:56:78:90',
+    primary: true,
+  ),
+  LocalInterface(name: 'en5', ip: '10.20.0.8', mac: '02:12:34:56:78:92'),
+], notice: 'Other active interfaces are ignored.');
 
 class FakeNetworkAdapter implements NetworkAdapter {
   FakeNetworkAdapter({
@@ -57,19 +54,17 @@ class FakeNetworkAdapter implements NetworkAdapter {
   final Future<LocalResolution>? pending;
   final InterfaceSnapshot snapshot;
   int resolveCalls = 0;
-  String? lastInterface;
   @override
   Future<InterfaceSnapshot> interfaces() async => snapshot;
   @override
-  Future<LocalResolution> resolve(String ip, {String? interfaceName}) async {
+  Future<LocalResolution> resolve(String ip) async {
     resolveCalls++;
-    lastInterface = interfaceName;
     if (failure != null) throw failure!;
     return pending ??
         LocalResolution(
           ip: ip,
           mac: exampleResolution.mac,
-          interfaceName: interfaceName ?? 'en0',
+          interfaceName: 'en0',
           isOwnInterface: ip == '192.168.1.8',
         );
   }

@@ -1,6 +1,5 @@
 import 'package:desktop_core/desktop_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'lookup/lookup_controller.dart';
@@ -23,6 +22,7 @@ class NetworkLookupApp extends StatelessWidget {
   );
 }
 
+/// One view: address in, identity out, history below.
 class NetworkLookupPage extends ConsumerStatefulWidget {
   const NetworkLookupPage({super.key});
   @override
@@ -31,43 +31,19 @@ class NetworkLookupPage extends ConsumerStatefulWidget {
 
 class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
   final _input = TextEditingController();
-  final _inputFocus = FocusNode();
-  int _page = 0;
-  String? _interface;
 
   @override
   void dispose() {
     _input.dispose();
-    _inputFocus.dispose();
     super.dispose();
   }
 
-  void _submit() {
-    final available = ref.read(interfacesProvider).value?.interfaces;
-    final selected = available?.any((i) => i.name == _interface) == true
-        ? _interface
-        : null;
-    ref
-        .read(lookupControllerProvider.notifier)
-        .lookup(_input.text, interfaceName: selected);
-  }
+  void _submit() =>
+      ref.read(lookupControllerProvider.notifier).lookup(_input.text);
 
   void _refresh() {
     ref.invalidate(historyProvider);
-    if (_page == 0) ref.invalidate(interfacesProvider);
-  }
-
-  void _focusInput() {
-    setState(() => _page = 0);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _inputFocus.requestFocus();
-        _input.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: _input.text.length,
-        );
-      }
-    });
+    ref.invalidate(interfacesProvider);
   }
 
   @override
@@ -75,138 +51,126 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
     final state = ref.watch(lookupControllerProvider);
     final history = ref.watch(historyProvider);
     final interfaces = ref.watch(interfacesProvider);
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyL, meta: true): _focusInput,
-        const SingleActivator(LogicalKeyboardKey.keyL, control: true):
-            _focusInput,
-        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): _refresh,
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): _refresh,
-      },
-      child: Focus(
-        autofocus: true,
-        child: DesktopShell(
-          productName: 'Network Lookup',
-          title: _page == 0 ? 'Network Lookup' : 'Lookup history',
-          subtitle: _page == 0
-              ? 'Resolve a local IPv4 address to its MAC and vendor'
-              : 'Latest 30 lookups saved by the API',
-          busy: state.busy,
-          destinations: const [
-            DesktopDestination(label: 'Lookup', icon: Icons.lan_outlined),
-            DesktopDestination(label: 'History', icon: Icons.history_rounded),
-          ],
-          selectedIndex: _page,
-          onDestinationSelected: (index) {
-            setState(() => _page = index);
-            if (index == 1) ref.invalidate(historyProvider);
-          },
-          actions: [
-            OutlinedButton.icon(
-              onPressed: _refresh,
-              icon: SpinningIcon(
-                active: history.isLoading || interfaces.isLoading,
-              ),
-              label: const Text('Refresh'),
-            ),
-          ],
-          footer: _ApiStatus(
-            authority: Uri.tryParse(ref.watch(apiClientProvider).baseUrl)
-                ?.authority,
-            history: history,
-          ),
-          child: _page == 1
-              ? _HistoryPage(
-                  history: history,
-                  onRefresh: () => ref.invalidate(historyProvider),
-                )
-              : SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _queryRow(state),
-                      const SizedBox(height: 10),
-                      _interfaceRow(state, interfaces),
-                      const SizedBox(height: 18),
-                      SectionCard(
-                        padding: EdgeInsets.zero,
-                        child: StateSwitcher(
-                          child: KeyedSubtree(
-                            key: ValueKey(
-                              '${state.phase}-${state.record?.id}-'
-                              '${state.resolution?.mac}-${state.message}',
-                            ),
-                            child: LookupResultCard(state: state),
-                          ),
-                        ),
+    return DesktopShell(
+      productName: 'Network Lookup',
+      title: 'Network Lookup',
+      busy: state.busy,
+      actions: [
+        OutlinedButton.icon(
+          onPressed: _refresh,
+          icon: SpinningIcon(active: history.isLoading || interfaces.isLoading),
+          label: const Text('Refresh'),
+        ),
+      ],
+      footer: _ApiStatus(
+        authority: Uri.tryParse(ref.watch(apiClientProvider).baseUrl)
+            ?.authority,
+        history: history,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('ip-input'),
+                    controller: _input,
+                    autofocus: true,
+                    enabled: !state.busy,
+                    onSubmitted: (_) => _submit(),
+                    style: AppText.mono.copyWith(
+                      fontSize: 13.5,
+                      color: context.colors.text,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'IPv4 address, for example 192.168.1.10',
+                      prefixIcon: Icon(Icons.lan_outlined, size: 16),
+                      prefixIconConstraints: BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 0,
                       ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Text(
-                            'Recent lookups',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => setState(() => _page = 1),
-                            child: const Text('View all'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      SectionCard(
-                        padding: EdgeInsets.zero,
-                        child: LookupTable(
-                          history: history,
-                          limit: 5,
-                          onRefresh: () => ref.invalidate(historyProvider),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  key: const Key('lookup-button'),
+                  onPressed: state.busy ? null : _submit,
+                  child: Text(state.busy ? 'Looking up…' : 'Look up'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _OwnAddressRow(
+              interfaces: interfaces,
+              enabled: !state.busy,
+              onUse: (ip) {
+                _input.text = ip;
+                _submit();
+              },
+              onRetry: () => ref.invalidate(interfacesProvider),
+            ),
+            const SizedBox(height: 18),
+            SectionCard(
+              padding: EdgeInsets.zero,
+              child: StateSwitcher(
+                child: KeyedSubtree(
+                  key: ValueKey(
+                    '${state.phase}-${state.record?.id}-'
+                    '${state.resolution?.mac}-${state.message}',
+                  ),
+                  child: LookupResultCard(state: state),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Text(
+                  'Lookup history',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Latest 30 saved by the API · newest first',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SectionCard(
+              padding: EdgeInsets.zero,
+              child: LookupTable(
+                history: history,
+                onRefresh: () => ref.invalidate(historyProvider),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _queryRow(LookupState state) => Row(
-    children: [
-      Expanded(
-        child: TextField(
-          key: const Key('ip-input'),
-          controller: _input,
-          focusNode: _inputFocus,
-          autofocus: true,
-          enabled: !state.busy,
-          onSubmitted: (_) => _submit(),
-          style: AppText.mono.copyWith(
-            fontSize: 13.5,
-            color: context.colors.text,
-          ),
-          decoration: const InputDecoration(
-            hintText: 'IPv4 address, for example 192.168.1.10',
-            prefixIcon: Icon(Icons.lan_outlined, size: 16),
-            prefixIconConstraints: BoxConstraints(minWidth: 34, minHeight: 0),
-          ),
-        ),
-      ),
-      const SizedBox(width: 8),
-      FilledButton(
-        key: const Key('lookup-button'),
-        onPressed: state.busy ? null : _submit,
-        child: Text(state.busy ? 'Looking up…' : 'Look up'),
-      ),
-    ],
-  );
+/// Optional challenge: detect the machine's primary active IPv4 address.
+class _OwnAddressRow extends StatelessWidget {
+  const _OwnAddressRow({
+    required this.interfaces,
+    required this.enabled,
+    required this.onUse,
+    required this.onRetry,
+  });
+  final AsyncValue<InterfaceSnapshot> interfaces;
+  final bool enabled;
+  final ValueChanged<String> onUse;
+  final VoidCallback onRetry;
 
-  Widget _interfaceRow(
-    LookupState state,
-    AsyncValue<InterfaceSnapshot> interfaces,
-  ) {
-    final c = context.colors;
-    final isWindows = Theme.of(context).platform == TargetPlatform.windows;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isWindows = theme.platform == TargetPlatform.windows;
     return interfaces.when(
       skipLoadingOnRefresh: false,
       loading: () => Row(
@@ -222,7 +186,7 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
               isWindows
                   ? 'Reading active interfaces… $_windowsDiscoveryHint'
                   : 'Reading active interfaces…',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: theme.textTheme.bodySmall,
             ),
           ),
         ],
@@ -230,78 +194,29 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
       error: (error, _) => InlineNotice(
         kind: NoticeKind.error,
         message: friendlyError(error),
-        action: TextButton(
-          onPressed: () => ref.invalidate(interfacesProvider),
-          child: const Text('Retry'),
-        ),
+        action: TextButton(onPressed: onRetry, child: const Text('Retry')),
       ),
       data: (snapshot) {
-        final names = <String, LocalInterface>{
-          for (final i in snapshot.interfaces) i.name: i,
-        };
-        final selected = names.containsKey(_interface) ? _interface : null;
-        final own = selected == null ? snapshot.preferred : names[selected];
-        final summary = snapshot.interfaces.isEmpty
-            ? 'No active IPv4 interfaces found. Check your network connection.'
-            : snapshot.notice ??
-                  'Primary interface: ${snapshot.preferred!.displayName} · ${snapshot.preferred!.ip}';
+        final primary = snapshot.preferred;
         return Row(
           children: [
-            Text('Interface', style: AppText.label(context)),
-            const SizedBox(width: 10),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300, minWidth: 140),
-              child: DropdownButton<String>(
-                value: selected ?? '',
-                isDense: true,
-                isExpanded: true,
-                underline: const SizedBox.shrink(),
-                focusColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                iconSize: 18,
-                iconEnabledColor: c.textSecondary,
-                style: Theme.of(context).textTheme.bodyMedium,
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('All interfaces'),
-                  ),
-                  for (final i in names.values)
-                    DropdownMenuItem(
-                      value: i.name,
-                      child: Text(
-                        '${i.displayName} · ${i.ip}${i.primary ? ' · primary' : ''}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                onChanged: state.busy
-                    ? null
-                    : (value) => setState(
-                        () => _interface = value == '' ? null : value,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 6),
             TextButton.icon(
-              onPressed: own == null || state.busy
+              onPressed: primary == null || !enabled
                   ? null
-                  : () {
-                      _input.text = own.ip;
-                      setState(() => _interface = own.name);
-                      _inputFocus.requestFocus();
-                    },
+                  : () => onUse(primary.ip),
               icon: const Icon(Icons.my_location_rounded, size: 14),
               label: const Text('Use my IP'),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                summary,
+                primary == null
+                    ? 'No active IPv4 interfaces found. Check your network connection.'
+                    : 'Primary interface: ${primary.displayName} · ${primary.ip}'
+                          '${snapshot.notice == null ? '' : ' · ${snapshot.notice}'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: theme.textTheme.bodySmall,
               ),
             ),
           ],
@@ -459,47 +374,16 @@ class LookupResultCard extends StatelessWidget {
           Wrap(
             spacing: 36,
             runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.start,
             children: [
               DetailField(label: 'IP address', value: resolution.ip),
-              DetailField(
-                label: 'MAC address',
-                value: resolution.mac,
-                trailing: Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: IconButton(
-                    tooltip: 'Copy MAC address',
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 13,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 22,
-                      height: 20,
-                    ),
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(Icons.copy_rounded),
-                    onPressed: () async {
-                      await Clipboard.setData(
-                        ClipboardData(text: resolution.mac),
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('MAC address copied'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ),
-              ),
+              DetailField(label: 'MAC address', value: resolution.mac),
               DetailField(label: 'Interface', value: resolution.interfaceName),
             ],
           ),
           const SizedBox(height: 14),
           Text(
             record == null
-                ? 'History save unconfirmed · check History before repeating.'
+                ? 'History save unconfirmed · check the history below before repeating.'
                 : 'Saved to history · ${formatTimestamp(record.createdAt)}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: record == null ? c.warning : c.textTertiary,
@@ -519,48 +403,15 @@ final _windowsDiscoveryHint =
     'Windows network initialization may take up to '
     '${NativeNetworkAdapter.windowsDiscoveryTimeout.inSeconds} seconds on first use.';
 
-class _HistoryPage extends StatelessWidget {
-  const _HistoryPage({required this.history, required this.onRefresh});
-  final AsyncValue<List<LookupRecord>> history;
-  final VoidCallback onRefresh;
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          Text('Saved lookups', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(width: 10),
-          Text(
-            'Newest first · resolved, unknown, and failed attempts',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Expanded(
-        child: SectionCard(
-          padding: EdgeInsets.zero,
-          child: SingleChildScrollView(
-            child: LookupTable(history: history, onRefresh: onRefresh),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
 /// History rows straight from the API. Never shows an invented row.
 class LookupTable extends StatelessWidget {
   const LookupTable({
     super.key,
     required this.history,
     required this.onRefresh,
-    this.limit,
   });
   final AsyncValue<List<LookupRecord>> history;
   final VoidCallback onRefresh;
-  final int? limit;
 
   @override
   Widget build(BuildContext context) => history.when(
@@ -586,7 +437,6 @@ class LookupTable extends StatelessWidget {
           icon: Icons.history_rounded,
         );
       }
-      final visible = limit == null ? records : records.take(limit!).toList();
       return LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth > 760;
@@ -603,7 +453,7 @@ class LookupTable extends StatelessWidget {
                   Text('Status'),
                 ],
               ),
-              for (final record in visible)
+              for (final record in records)
                 _HistoryRow(record: record, wide: wide),
             ],
           );
@@ -625,7 +475,7 @@ class _TableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final labelStyle = AppText.label(context);
-    Widget cell(int index, Widget child) =>
+    Widget cell(Widget child) =>
         header ? DefaultTextStyle(style: labelStyle, child: child) : child;
     return Container(
       height: header ? 34 : 40,
@@ -635,11 +485,11 @@ class _TableRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(flex: 3, child: cell(0, cells[0])),
-          Expanded(flex: 2, child: cell(1, cells[1])),
-          Expanded(flex: 2, child: cell(2, cells[2])),
-          if (wide) Expanded(flex: 2, child: cell(3, cells[3])),
-          SizedBox(width: 120, child: cell(4, cells[4])),
+          Expanded(flex: 3, child: cell(cells[0])),
+          Expanded(flex: 2, child: cell(cells[1])),
+          Expanded(flex: 2, child: cell(cells[2])),
+          if (wide) Expanded(flex: 2, child: cell(cells[3])),
+          SizedBox(width: 120, child: cell(cells[4])),
         ],
       ),
     );
@@ -712,7 +562,7 @@ class _HistoryRowState extends State<_HistoryRow> {
   }
 }
 
-/// Sidebar footer: whether the API answered the last history request.
+/// Whether the API answered the last history request.
 class _ApiStatus extends StatelessWidget {
   const _ApiStatus({required this.authority, required this.history});
   final String? authority;
@@ -725,23 +575,9 @@ class _ApiStatus extends StatelessWidget {
       AsyncValue(hasError: true) => (c.danger, 'API unreachable'),
       _ => (c.success, 'API connected'),
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        StatusPill(label, color: color),
-        if (authority != null) ...[
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 14),
-            child: Text(
-              authority!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.mono.copyWith(fontSize: 11, color: c.textTertiary),
-            ),
-          ),
-        ],
-      ],
+    return Tooltip(
+      message: authority ?? '',
+      child: StatusPill(label, color: color),
     );
   }
 }

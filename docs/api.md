@@ -9,12 +9,13 @@ Base URL: `http://127.0.0.1:3000`. Use JSON request bodies and `Content-Type: ap
 | Method | Path | Purpose | Normal response |
 | --- | --- | --- | --- |
 | `GET` | `/health` | Database readiness | `200 {"status":"ok"}` |
-| `POST` | `/lookups` | Perform and persist a MAC vendor lookup | `201` resolved or unknown record |
+| `GET` | `/lookups?mac=…` | Perform and persist a MAC vendor lookup (brief's form) | `200` resolved or unknown record |
+| `POST` | `/lookups` | Perform and persist a MAC vendor lookup (client's form) | `201` resolved or unknown record |
 | `GET` | `/lookups` | Read newest lookup history | `200` paginated records |
 | `POST` | `/process_events` | Persist a client-reported confirmed termination | `201` new; `200` identical duplicate |
 | `GET` | `/process_events` | Read termination audit history | `200` paginated records |
 
-The assignment illustrates lookup using GET. Here, performing a lookup creates history, so **POST performs the operation** and **GET reads history**. A query such as `GET /lookups?mac=...` is not a vendor-lookup command. The canonical contract does not define an alias for the assignment example.
+`GET /lookups?mac=...` performs a lookup and returns the persisted record with `200`, matching the brief's example. The desktop client uses `POST /lookups`, which does the same work and answers `201`, because the operation creates a history record. Plain `GET /lookups` reads history.
 
 ## Create a lookup
 

@@ -94,30 +94,27 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets(
-    'my IP fills primary interface metadata and exposes manual selection',
-    (tester) async {
-      final adapter = FakeNetworkAdapter();
-      await mount(tester, adapter: adapter);
-      await tester.tap(find.text('Use my IP'));
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('ip-input')))
-            .controller!
-            .text,
-        '192.168.1.8',
-      );
-      await tester.tap(find.byKey(const Key('lookup-button')));
-      await tester.pumpAndSettle();
-      expect(adapter.lastInterface, 'en0');
-      expect(
-        find.text('Identified from local interface metadata.'),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('Use my IP resolves the primary interface from local metadata', (
+    tester,
+  ) async {
+    final adapter = FakeNetworkAdapter();
+    await mount(tester, adapter: adapter);
+    await tester.tap(find.text('Use my IP'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('ip-input')))
+          .controller!
+          .text,
+      '192.168.1.8',
+    );
+    expect(adapter.resolveCalls, 1);
+    expect(
+      find.text('Identified from local interface metadata.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'input validation and cache miss are actionable without fake persistence',
     (tester) async {
@@ -196,40 +193,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('History save unconfirmed'), findsOneWidget);
       expect(find.text(exampleResolution.mac), findsOneWidget);
-      await tester.tap(find.text('History'));
-      await tester.pumpAndSettle();
       expect(find.text('History is unavailable'), findsOneWidget);
       expect(find.text('Retry history'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets(
-    'history navigation uses API rows and remains scrollable after resize',
-    (tester) async {
-      await mount(
-        tester,
-        repository: FakeLookupRepository(records: exampleHistory),
-        size: const Size(1440, 1000),
-      );
-      await tester.tap(find.text('History'));
-      await tester.pumpAndSettle();
-      expect(find.text('Saved lookups'), findsOneWidget);
-      expect(find.text('Example Networks'), findsOneWidget);
-      tester.view.physicalSize = const Size(960, 680);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('ip-input')), findsOneWidget);
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('ip-input')))
-            .focusNode!
-            .hasFocus,
-        isTrue,
-      );
-    },
-  );
+  testWidgets('history lists API rows and remains scrollable after resize', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      repository: FakeLookupRepository(records: exampleHistory),
+      size: const Size(1440, 1000),
+    );
+    expect(find.text('Lookup history'), findsOneWidget);
+    expect(find.text('Example Networks'), findsOneWidget);
+    tester.view.physicalSize = const Size(960, 680);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('ip-input')), findsOneWidget);
+  });
 }

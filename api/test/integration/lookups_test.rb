@@ -23,6 +23,20 @@ class LookupsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "GET /lookups?mac= performs and persists a lookup as the brief illustrates" do
+    stub_vendor
+    assert_difference("Lookup.count", 1) do
+      get "/lookups", params: { mac: "00-1b-63-84-45-e6", ip: "192.0.2.10" }
+    end
+    assert_response :ok
+    assert_equal "Apple, Inc.", response.parsed_body.dig("data", "vendor")
+    assert_equal "192.0.2.10", response.parsed_body.dig("data", "ip")
+    assert_no_difference("Lookup.count") { get "/lookups", params: { mac: "not-a-mac" } }
+    assert_response :unprocessable_content
+    get "/lookups"
+    assert_equal 1, response.parsed_body.dig("meta", "total")
+  end
+
   test "hyphenated MAC without IP returns unknown and persists it" do
     stub_vendor(status: 404)
     assert_difference("Lookup.count", 1) do

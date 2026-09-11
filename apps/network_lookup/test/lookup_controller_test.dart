@@ -42,7 +42,7 @@ void main() {
     expect(repository.submitCalls, 0);
     expect(scope.read(lookupControllerProvider).message, 'cache miss');
   });
-  test('async stages are exposed, duplicate submits ignored, selected adapter forwarded', () async {
+  test('async stages are exposed and duplicate submits are ignored', () async {
     final pending = Completer<LocalResolution>();
     final adapter = FakeNetworkAdapter(pending: pending.future);
     final repository = FakeLookupRepository();
@@ -50,11 +50,10 @@ void main() {
     final phases = <LookupPhase>[];
     scope.listen(lookupControllerProvider, (_, next) => phases.add(next.phase));
     final controller = scope.read(lookupControllerProvider.notifier);
-    final first = controller.lookup('192.168.1.24', interfaceName: 'en0');
+    final first = controller.lookup('192.168.1.24');
     await controller.lookup('192.168.1.25');
     expect(scope.read(lookupControllerProvider).busy, isTrue);
     expect(adapter.resolveCalls, 1);
-    expect(adapter.lastInterface, 'en0');
     pending.complete(exampleResolution);
     await first;
     expect(repository.submitCalls, 1);

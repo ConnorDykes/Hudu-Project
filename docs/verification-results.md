@@ -49,6 +49,15 @@ A second review pass focused on production readiness rather than features. Chang
 
 The first-pass UI was rebuilt as a quiet desktop utility: neutral graphite/paper surfaces that follow the system theme, one blue accent, hairline borders, sentence-case labels, Inter plus bundled JetBrains Mono for identifiers, and status shown as a dot and a word. Taglines, explainer cards, metric tiles, and per-row badges were removed; the header names the view and carries only its actions. Motion is limited to 120–260 ms eased cross-fades between result states, hover and selection transitions, a spinning refresh glyph, a thin busy bar, and skeleton rows while history loads. Process Manager gained keyboard control: Cmd/Ctrl+F focuses search, Escape clears it and returns focus to the table, arrow keys move the selection, Cmd/Ctrl+R refreshes. Controllers, repositories, and adapters were not changed. All widget suites pass against the new UI (9 shared, 41 network, 40 process); the README previews are regenerated dark-theme goldens.
 
+## Scope pass (September 10, 2026)
+
+The apps and API were re-read against the brief and trimmed to what it asks for:
+
+- **Network Lookup** is one view: address field, "Use my IP" (the optional primary-address challenge), the result, and the API history. The interface picker, the separate History tab, keyboard shortcuts, and the copy button were removed; the adapter no longer takes an interface parameter.
+- **Process Manager** keeps its two views (processes, audit history) and its keyboard control; the sidebar footer slogan and the long dialog note were cut.
+- **Rails** now also serves `GET /lookups?mac=...` as the brief illustrates, alongside the client's `POST /lookups`; demo seeds were removed.
+- **Shell** hides the sidebar when there is only one view. Evidence: Rails **40 tests**, RuboCop and Brakeman clean; Flutter **9 + 41 + 40 = 90 tests**, analysis clean; goldens regenerated.
+
 ## Remaining boundaries
 
 - Interactive native GUI inspection was blocked by the locked Mac. No lock bypass was attempted. Neither Mac interactive review nor Windows manual GUI testing is claimed.

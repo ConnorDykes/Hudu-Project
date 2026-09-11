@@ -158,7 +158,7 @@ For direct Flutter commands, pass `--dart-define=API_BASE_URL=...` to `flutter r
 | API unreachable | Confirm Rails is running; check `/health` from the client host and the compiled API URL |
 | Database not ready | Run `bin/rails db:prepare` inside `api/`; inspect the local Rails error without publishing private logs |
 | No desktop device / build toolchain failure | Run `flutter doctor -v` and `flutter devices`; resolve the intended desktop platform's diagnostics |
-| MAC not found | Check local IPv4 scope and adapter selection; absent ARP data does not mean the device is offline |
+| MAC not found | The address must be on the local link; absent ARP data does not mean the device is offline |
 | Vendor unknown | A MAC may have no provider match; distinguish `unknown` from provider failure |
 | Termination refused or unconfirmed | Check permissions and stale process identity; do not assume a sent request proves exit |
 | Terminated but audit pending | Restore API connectivity and retry audit delivery; never repeat termination for logging |

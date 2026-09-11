@@ -349,16 +349,17 @@ class DesktopDestination {
   final IconData icon;
 }
 
-/// Sidebar navigation plus a compact toolbar header. No hero copy: the title is
-/// the name of the current view and the header carries only its actions.
+/// Compact toolbar header, plus sidebar navigation when there are views to
+/// switch between. No hero copy: the title is the name of the current view and
+/// the header carries only its actions.
 class DesktopShell extends StatelessWidget {
   const DesktopShell({
     super.key,
     required this.title,
     required this.child,
-    required this.destinations,
-    required this.selectedIndex,
-    required this.onDestinationSelected,
+    this.destinations = const [],
+    this.selectedIndex = 0,
+    this.onDestinationSelected,
     this.subtitle,
     this.productName = 'Hudu',
     this.actions = const [],
@@ -370,7 +371,7 @@ class DesktopShell extends StatelessWidget {
   final Widget child;
   final List<DesktopDestination> destinations;
   final int selectedIndex;
-  final ValueChanged<int> onDestinationSelected;
+  final ValueChanged<int>? onDestinationSelected;
   final List<Widget> actions;
   final Widget? footer;
 
@@ -380,41 +381,43 @@ class DesktopShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final sidebar = destinations.length > 1;
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 840;
           return Row(
             children: [
-              AnimatedContainer(
-                duration: AppMotion.normal,
-                curve: AppMotion.curve,
-                width: compact ? 56 : 212,
-                decoration: BoxDecoration(
-                  color: c.sidebar,
-                  border: Border(right: BorderSide(color: c.hairline)),
+              if (sidebar)
+                AnimatedContainer(
+                  duration: AppMotion.normal,
+                  curve: AppMotion.curve,
+                  width: compact ? 56 : 212,
+                  decoration: BoxDecoration(
+                    color: c.sidebar,
+                    border: Border(right: BorderSide(color: c.hairline)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Brand(productName: productName, compact: compact),
+                      const SizedBox(height: 8),
+                      for (var i = 0; i < destinations.length; i++)
+                        _NavItem(
+                          destination: destinations[i],
+                          selected: selectedIndex == i,
+                          compact: compact,
+                          onTap: () => onDestinationSelected?.call(i),
+                        ),
+                      const Spacer(),
+                      if (footer != null && !compact)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: footer,
+                        ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _Brand(productName: productName, compact: compact),
-                    const SizedBox(height: 8),
-                    for (var i = 0; i < destinations.length; i++)
-                      _NavItem(
-                        destination: destinations[i],
-                        selected: selectedIndex == i,
-                        compact: compact,
-                        onTap: () => onDestinationSelected(i),
-                      ),
-                    const Spacer(),
-                    if (footer != null && !compact)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: footer,
-                      ),
-                  ],
-                ),
-              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -427,6 +430,10 @@ class DesktopShell extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
+                          if (!sidebar) ...[
+                            _Monogram(color: c),
+                            const SizedBox(width: 12),
+                          ],
                           Expanded(
                             child: AnimatedSwitcher(
                               duration: AppMotion.normal,
@@ -463,6 +470,10 @@ class DesktopShell extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (!sidebar && footer != null) ...[
+                            footer!,
+                            const SizedBox(width: 16),
+                          ],
                           for (final action in actions) ...[
                             const SizedBox(width: 8),
                             action,
@@ -517,24 +528,7 @@ class _Brand extends StatelessWidget {
             ? MainAxisAlignment.center
             : MainAxisAlignment.start,
         children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: c.accent,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'H',
-              style: TextStyle(
-                color: c.onAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-          ),
+          _Monogram(color: c),
           if (!compact) ...[
             const SizedBox(width: 10),
             Expanded(
@@ -550,6 +544,30 @@ class _Brand extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Monogram extends StatelessWidget {
+  const _Monogram({required this.color});
+  final AppColors color;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
+    decoration: BoxDecoration(
+      color: color.accent,
+      borderRadius: BorderRadius.circular(6),
+    ),
+    alignment: Alignment.center,
+    child: Text(
+      'H',
+      style: TextStyle(
+        color: color.onAccent,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        height: 1,
+      ),
+    ),
+  );
 }
 
 class _NavItem extends StatelessWidget {
@@ -991,11 +1009,9 @@ class DetailField extends StatelessWidget {
     required this.label,
     required this.value,
     this.mono = true,
-    this.trailing,
   });
   final String label, value;
   final bool mono;
-  final Widget? trailing;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1003,21 +1019,11 @@ class DetailField extends StatelessWidget {
     children: [
       Text(label, style: AppText.label(context)),
       const SizedBox(height: 4),
-      SizedBox(
-        height: 20,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SelectableText(
-              value,
-              style: mono
-                  ? AppText.mono.copyWith(fontSize: 13)
-                  : Theme.of(context).textTheme.bodyMedium,
-            ),
-            ?trailing,
-          ],
-        ),
+      SelectableText(
+        value,
+        style: mono
+            ? AppText.mono.copyWith(fontSize: 13)
+            : Theme.of(context).textTheme.bodyMedium,
       ),
     ],
   );

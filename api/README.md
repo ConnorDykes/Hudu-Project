@@ -61,11 +61,6 @@ bin/bundler-audit check --update
 
 WebMock prohibits all network access in tests. `json` is constrained below version
 3 because Rails 8.1.3.1 calls its parser with a positional options hash.
-Optional synthetic display fixtures (no network calls or real process actions):
-
-```sh
-DEMO_SEEDS=1 bin/rails db:seed
-```
 
 ## Optional development container
 

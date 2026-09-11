@@ -90,7 +90,7 @@ class LocalResolution {
 
 abstract interface class NetworkAdapter {
   Future<InterfaceSnapshot> interfaces();
-  Future<LocalResolution> resolve(String ip, {String? interfaceName});
+  Future<LocalResolution> resolve(String ip);
 }
 
 abstract interface class CommandRunner {
@@ -347,24 +347,19 @@ List<LocalInterface> parseWindowsInterfaces(String output) {
 LocalResolution selectResolution(
   String ip,
   List<LocalInterface> interfaces,
-  List<NeighborEntry> neighbors, {
-  String? interfaceName,
-}) {
-  final own = interfaces
-      .where(
-        (i) => i.ip == ip && (interfaceName == null || i.name == interfaceName),
-      )
-      .toList();
+  List<NeighborEntry> neighbors,
+) {
+  final own = interfaces.where((i) => i.ip == ip).toList();
   if (own.isNotEmpty) {
     if (own.any((i) => i.mac == null)) {
       throw const NetworkFailure(
         'This address belongs to a local interface without a hardware MAC '
-        '(common for VPNs). Select a physical interface.',
+        '(common for VPNs), so there is no vendor to look up.',
       );
     }
     if (own.map((i) => i.mac).toSet().length > 1) {
       throw const NetworkFailure(
-        'This IP appears on multiple local interfaces. Select an interface first.',
+        'This IP is assigned to more than one local interface, so its MAC is ambiguous.',
       );
     }
     return LocalResolution(
@@ -374,13 +369,7 @@ LocalResolution selectResolution(
       isOwnInterface: true,
     );
   }
-  final matches = neighbors
-      .where(
-        (entry) =>
-            entry.ip == ip &&
-            (interfaceName == null || entry.interfaceName == interfaceName),
-      )
-      .toList();
+  final matches = neighbors.where((entry) => entry.ip == ip).toList();
   if (matches.isEmpty) {
     throw const NetworkFailure(
       'No complete entry in the local neighbor cache. '
@@ -390,8 +379,8 @@ LocalResolution selectResolution(
   }
   if (matches.map((e) => e.mac).toSet().length > 1) {
     throw const NetworkFailure(
-      'Different MAC addresses were found on multiple adapters. '
-      'Select an interface to disambiguate this IP.',
+      'Different MAC addresses were found for this IP on multiple adapters, '
+      'so it cannot be identified unambiguously.',
     );
   }
   return LocalResolution(
@@ -501,7 +490,7 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
         ], elapsed);
         primary = RegExp(r'interface:\s*(\S+)').firstMatch(route)?[1];
       } on NetworkFailure {
-        notice = 'Default route unavailable. Choose an active interface below.';
+        notice = 'Default route unavailable; using the first active interface.';
       }
       values = parseMacInterfaces(
         await _run('/sbin/ifconfig', ['-a'], elapsed),
@@ -517,9 +506,10 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
       );
     }
     if (!values.any((i) => i.primary)) {
-      notice ??= 'No default-route interface found. The first active IPv4 is suggested; choose another if needed.';
+      notice ??=
+          'No default route found; using the first active IPv4 interface.';
     } else if (values.length > 1) {
-      notice = 'Default-route interface suggested. VPNs or multiple networks may require another interface.';
+      notice = 'Other active interfaces are ignored.';
     }
     return InterfaceSnapshot(values, notice: notice);
   }
@@ -539,7 +529,7 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
   }
 
   @override
-  Future<LocalResolution> resolve(String ip, {String? interfaceName}) async {
+  Future<LocalResolution> resolve(String ip) async {
     final canonical = canonicalIpv4(ip);
     if (canonical == null) {
       throw const NetworkFailure(
@@ -549,16 +539,11 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
     final elapsed = _startDeadline();
     final local = await _interfaces(elapsed);
     // Self resolution must not depend on ARP access or a self cache entry.
-    final isOwn = local.interfaces.any(
-      (i) =>
-          i.ip == canonical &&
-          (interfaceName == null || i.name == interfaceName),
-    );
+    final isOwn = local.interfaces.any((i) => i.ip == canonical);
     return selectResolution(
       canonical,
       local.interfaces,
       isOwn ? [] : await _neighbors(elapsed),
-      interfaceName: interfaceName,
     );
   }
 }

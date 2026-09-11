@@ -10,6 +10,8 @@ Success `201`: `{"data":{"id":1,"ip":"192.168.1.10","mac":"00:1B:63:84:45:E6","v
 
 Unknown vendor: `201`, same record with `vendor:null,status:"unknown"` (a completed lookup with no vendor is not a missing HTTP resource). Provider error: `502` code `vendor_unavailable`; timeout `504` code `vendor_timeout`; provider rate limit `503` code `vendor_rate_limited`. Persist with status `failed`, vendor null, return record in optional `data`. Invalid input `422` and no persisted row. Do not persist ARP misses here: these are client-local discovery failures without a MAC to submit.
 
+`GET /lookups?mac=...&ip=...`: same behavior and body as `POST /lookups` but answers `200`; provided so the brief's illustrated form works verbatim.
+
 `GET /lookups?limit=30&offset=0`: `{"data":[...records],"meta":{"limit":30,"offset":0,"total":1}}`; order created_at desc then id desc. Default limit 30, max 100, offset >=0; invalid pagination 422.
 
 ## Process events

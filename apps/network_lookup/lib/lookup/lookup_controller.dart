@@ -49,7 +49,7 @@ class LookupController extends Notifier<LookupState> {
   @override
   LookupState build() => const LookupState();
 
-  Future<void> lookup(String input, {String? interfaceName}) async {
+  Future<void> lookup(String input) async {
     // A double click / Enter while busy must never create a second API row.
     if (state.busy) return;
     final ip = canonicalIpv4(input);
@@ -63,9 +63,7 @@ class LookupController extends Notifier<LookupState> {
     state = LookupState(phase: LookupPhase.discovering, ip: ip);
     LocalResolution? resolution;
     try {
-      resolution = await ref
-          .read(networkAdapterProvider)
-          .resolve(ip, interfaceName: interfaceName);
+      resolution = await ref.read(networkAdapterProvider).resolve(ip);
       if (!ref.mounted) return;
       state = LookupState(
         phase: LookupPhase.submitting,
