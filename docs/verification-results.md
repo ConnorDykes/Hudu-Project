@@ -4,6 +4,9 @@
 
 The Rails source review after v1.1.0 passes **57 tests / 630 assertions**, with 40 Ruby files clean under RuboCop, no Brakeman warnings or dependency advisories, and successful development/production autoload checks. A fresh isolated production database and server passed both clients' real HTTP smoke suites (two Network Lookup cases, one Process Manager case), using a seeded vendor for the lookup round trip. Production JSON 500 responses and HEAD semantics were also checked in a production-mode Rails process. These are local verification results for the source follow-up; the v1.1.0 download archives are unchanged. See the [Rails review](rails-review.md) for scope, corrections, and limits.
 
+- Reviewed source: [82a3dce](https://github.com/ConnorDykes/Hudu-Project/commit/82a3dce8a188f80b1e7f4354e0ac12ff3a2bd2c6).
+- Hosted verification: **all nine jobs passed** in [run 34615645667](https://github.com/ConnorDykes/Hudu-Project/actions/runs/34615645667), including Rails tests, lint, security, production autoloading, API container/HTTP persistence, all Flutter checks, and all four native app/platform builds. The v1.1.0 release assets were not replaced.
+
 ## Published v1.1.0 evidence
 
 Submission release: **v1.1.0**. Checked September 10, 2026 (America/Denver; September 11 UTC). The records below describe that published revision; its 46-test Rails total predates the follow-up review. Historical counts and previous release evidence are kept in the [historical verification record](verification-history.md).
