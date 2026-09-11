@@ -11,6 +11,11 @@ module ActiveSupport
     # Run tests in parallel with specified workers
     parallelize(workers: 1)
 
+    # A freshly prepared test database is seeded with the offline vendor OUIs.
+    # Tests reason about provider behavior explicitly, so start each one with an
+    # empty vendors table; the transactional wrapper restores the seeds after.
+    setup { Vendor.delete_all }
+
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     def lookup_attributes
       { mac: "00:1B:63:84:45:E6", ip: "192.0.2.10" }
