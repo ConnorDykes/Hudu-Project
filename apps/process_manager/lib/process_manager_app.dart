@@ -14,7 +14,10 @@ class ProcessManagerApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Hudu Process Manager',
     debugShowCheckedModeBanner: false,
-    theme: AppTheme.dark,
+    theme: AppTheme.light,
+    darkTheme: AppTheme.dark,
+    themeMode: ThemeMode.system,
+    themeAnimationDuration: AppMotion.slow,
     home: const ProcessManagerPage(),
   );
 }
@@ -28,6 +31,7 @@ class ProcessManagerPage extends ConsumerStatefulWidget {
 class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   int _page = 0;
   final _search = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -46,12 +50,17 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(managerProvider);
     final controller = ref.read(managerProvider.notifier);
+    final c = context.colors;
+    final refreshing = _page == 0 ? state.refreshing : state.historyLoading;
     return DesktopShell(
-      title: _page == 0 ? 'Process manager' : 'Termination history',
+      productName: 'Process Manager',
+      title: _page == 0 ? 'Processes' : 'Audit history',
       subtitle: _page == 0
-          ? 'A clear view of what’s running. You stay in control.'
-          : 'Confirmed exits, recorded by your Rails API.',
-      eyebrow: 'SYSTEM TOOLS / ${_page == 0 ? 'PROCESSES' : 'AUDIT TRAIL'}',
+          ? _summary(state)
+          : 'Confirmed terminations recorded by the API · UTC',
+      busy: _page == 0
+          ? state.terminating || (state.refreshing && state.processes.isEmpty)
+          : state.historyLoading && state.history.isEmpty,
       destinations: const [
         DesktopDestination(label: 'Processes', icon: Icons.memory_outlined),
         DesktopDestination(label: 'Audit history', icon: Icons.history_rounded),
@@ -63,40 +72,46 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
       },
       actions: [
         OutlinedButton.icon(
-          onPressed:
-              (_page == 0
-                  ? state.refreshing || state.terminating
-                  : state.historyLoading)
+          onPressed: (_page == 0 ? refreshing || state.terminating : refreshing)
               ? null
-              : () {
-                  unawaited(
-                    _page == 0
-                        ? controller.refresh()
-                        : controller.refreshHistory(),
-                  );
-                },
-          icon: const Icon(Icons.refresh, size: 18),
+              : () => unawaited(
+                  _page == 0
+                      ? controller.refresh()
+                      : controller.refreshHistory(),
+                ),
+          icon: SpinningIcon(active: refreshing),
           label: const Text('Refresh'),
         ),
       ],
-      footer: const Column(
+      footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StatusPill('LOCAL MACHINE'),
-          SizedBox(height: 16),
-          Text(
-            'Current user permissions\nNo elevation. No process trees.',
-            style: TextStyle(fontSize: 11, color: AppTheme.muted, height: 1.8),
+          StatusPill(
+            state.historyLoading
+                ? 'Checking API'
+                : state.historyError != null
+                ? 'API unreachable'
+                : 'API connected',
+            color: state.historyLoading
+                ? c.textTertiary
+                : state.historyError != null
+                ? c.danger
+                : c.success,
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Text(
+              'Current user · no elevation',
+              style: TextStyle(fontSize: 11, color: c.textTertiary),
+            ),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (state.storageError != null)
-            _Notice(state.storageError!, warning: true),
-          if (state.notice != null) _Notice(state.notice!),
-          if (state.pending.isNotEmpty) _pendingBanner(state, controller),
+          _notices(state, controller),
           Expanded(
             child: _page == 0 ? _processes(state, controller) : _history(state),
           ),
@@ -105,105 +120,143 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     );
   }
 
-  Widget _pendingBanner(
-    ManagerState state,
-    ManagerController controller,
-  ) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF302B20),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.cloud_upload_outlined,
-            color: Color(0xFFF0CA80),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '${state.pending.length} confirmed ${state.pending.length == 1 ? 'exit' : 'exits'} · audit pending\n${state.storageError != null ? 'Some events are only in memory. Keep app open and retry.' : state.auditError ?? 'Saved locally. Delivery retries automatically every 30 seconds.'}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFFF0CA80)),
-            ),
-          ),
-          TextButton(
+  String _summary(ManagerState state) {
+    final count = '${state.processes.length} processes';
+    final updated = state.updatedAt == null
+        ? 'waiting for first refresh'
+        : 'updated ${_time(state.updatedAt!)}';
+    final pending = state.pending.isEmpty
+        ? ''
+        : ' · ${state.pending.length} undelivered audit${state.pending.length == 1 ? '' : 's'}';
+    return '$count · $updated$pending';
+  }
+
+  /// Storage, operation, and delivery notices, animated in and out together.
+  Widget _notices(ManagerState state, ManagerController controller) {
+    final items = <Widget>[
+      if (state.storageError != null)
+        InlineNotice(
+          key: const ValueKey('storage'),
+          kind: NoticeKind.error,
+          message: state.storageError!,
+        ),
+      if (state.notice != null)
+        InlineNotice(
+          key: ValueKey('notice-${state.notice}'),
+          kind: state.notice!.contains('Exit confirmed')
+              ? NoticeKind.info
+              : NoticeKind.warning,
+          message: state.notice!,
+        ),
+      if (state.pending.isNotEmpty)
+        InlineNotice(
+          key: const ValueKey('pending'),
+          kind: NoticeKind.warning,
+          message:
+              '${state.pending.length} confirmed ${state.pending.length == 1 ? 'exit' : 'exits'} · audit pending',
+          detail: state.storageError != null
+              ? 'Some events are only in memory. Keep app open and retry.'
+              : state.auditError ?? 'Saved locally. Delivery retries automatically every 30 seconds.',
+          action: TextButton(
             onPressed: state.delivering
                 ? null
                 : () => unawaited(controller.retryAudits()),
             child: Text(state.delivering ? 'Delivering…' : 'Retry audit'),
           ),
+        ),
+      if (_page == 0 && state.processError != null)
+        InlineNotice(
+          key: const ValueKey('process-error'),
+          kind: NoticeKind.error,
+          message: state.processError!,
+        ),
+      if (_page == 1 && state.historyError != null)
+        InlineNotice(
+          key: const ValueKey('history-error'),
+          kind: NoticeKind.error,
+          message: state.historyError!,
+        ),
+    ];
+    return AnimatedSize(
+      duration: AppMotion.normal,
+      curve: AppMotion.curve,
+      alignment: Alignment.topCenter,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final item in items)
+            Padding(padding: const EdgeInsets.only(bottom: 10), child: item),
+          if (items.isNotEmpty) const SizedBox(height: 4),
         ],
       ),
-    ),
-  );
+    );
+  }
 
   Widget _processes(ManagerState state, ManagerController controller) {
+    final c = context.colors;
     final rows = state.visible;
+    final selected = state.selected;
+    final canTerminate =
+        selected != null &&
+        !state.terminating &&
+        !state.refreshing &&
+        state.ready &&
+        state.storageError == null &&
+        selected.identity != null &&
+        selected.pid > 0 &&
+        selected.pid != pid &&
+        selected.status != 'Exited';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (MediaQuery.sizeOf(context).height >= 780) ...[
-          Row(
-            children: [
-              Expanded(
-                child: _Metric(
-                  label: 'LOCAL PROCESSES',
-                  value: '${state.processes.length}',
-                  detail: 'Visible to this machine',
-                  icon: Icons.memory_outlined,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _Metric(
-                  label: 'REFRESH MODE',
-                  value: state.interval == 0 ? 'Manual' : '${state.interval}s',
-                  detail: state.updatedAt == null
-                      ? 'Waiting for first refresh'
-                      : 'Updated ${_time(state.updatedAt!)}',
-                  icon: Icons.sync,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _Metric(
-                  label: 'AUDIT OUTBOX',
-                  value: '${state.pending.length}',
-                  detail: state.pending.isEmpty
-                      ? 'No pending events'
-                      : 'Waiting for API delivery',
-                  icon: Icons.cloud_done_outlined,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-        ],
         Row(
           children: [
-            Expanded(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 340),
               child: TextField(
                 controller: _search,
-                onChanged: controller.search,
-                decoration: const InputDecoration(
-                  hintText: 'Search process name or PID',
-                  prefixIcon: Icon(Icons.search, size: 21),
+                onChanged: (value) {
+                  controller.search(value);
+                  setState(() {});
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search by name or PID',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 16),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 34,
+                    minHeight: 0,
+                  ),
+                  suffixIcon: _search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          iconSize: 14,
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _search.clear();
+                            controller.search('');
+                            setState(() {});
+                          },
+                        ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 34,
+                    minHeight: 0,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-            const Text(
-              'Auto-refresh',
-              style: TextStyle(fontSize: 12, color: AppTheme.muted),
-            ),
-            const SizedBox(width: 12),
+            const Spacer(),
+            Text('Auto-refresh', style: AppText.label(context)),
+            const SizedBox(width: 8),
             DropdownButton<int>(
               value: state.interval,
-              borderRadius: BorderRadius.circular(12),
+              isDense: true,
+              underline: const SizedBox.shrink(),
+              focusColor: Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              iconSize: 18,
+              iconEnabledColor: c.textSecondary,
+              style: Theme.of(context).textTheme.bodyMedium,
               items: const [
                 DropdownMenuItem(value: 0, child: Text('Off')),
                 DropdownMenuItem(value: 5, child: Text('5 sec')),
@@ -216,42 +269,17 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        if (state.processError != null)
-          _Notice(state.processError!, warning: true),
+        const SizedBox(height: 14),
         Expanded(
           child: SectionCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Running processes',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 12),
-                      StatusPill('${rows.length} shown', color: AppTheme.muted),
-                      const Spacer(),
-                      if (state.refreshing)
-                        const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
                 _tableHeading(state, controller),
+                const Divider(),
                 Expanded(
                   child: rows.isEmpty
-                      ? _PanelEmpty(
+                      ? EmptyState(
                           title: state.refreshing
                               ? 'Reading local processes…'
                               : state.processError != null
@@ -266,57 +294,88 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                               : state.query.trim().isNotEmpty
                               ? 'Try another name or PID, or clear your search.'
                               : 'The operating system returned an empty list. Try refreshing.',
-                          icon: Icons.manage_search,
+                          icon: Icons.manage_search_rounded,
                         )
                       : ListView.builder(
                           itemCount: rows.length,
-                          itemBuilder: (context, index) =>
-                              _processRow(rows[index], state, controller),
+                          itemExtent: 36,
+                          itemBuilder: (context, index) => _ProcessRow(
+                            process: rows[index],
+                            selected:
+                                state.selected?.sameIdentity(rows[index]) ??
+                                false,
+                            ownPid: pid,
+                            onTap: () => controller.select(
+                              state.selected?.sameIdentity(rows[index]) ?? false
+                                  ? null
+                                  : rows[index],
+                            ),
+                          ),
                         ),
                 ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 13,
-                  ),
+                const Divider(),
+                Container(
+                  height: 50,
+                  padding: const EdgeInsets.fromLTRB(14, 0, 8, 0),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          state.selected == null
-                              ? 'Select a process to inspect or terminate'
-                              : '${state.selected!.name}  ·  PID ${state.selected!.pid}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppTheme.muted,
-                            fontSize: 12,
+                        child: AnimatedSwitcher(
+                          duration: AppMotion.normal,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(opacity: animation, child: child),
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [...previous, ?current],
                           ),
+                          child: selected == null
+                              ? Text(
+                                  key: const ValueKey('none'),
+                                  '${rows.length} shown · select a process to inspect or terminate',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                )
+                              : Row(
+                                  key: ValueKey(
+                                    '${selected.pid}-${selected.identity}',
+                                  ),
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        selected.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'PID ${selected.pid}',
+                                      style: AppText.mono.copyWith(
+                                        color: c.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       FilledButton.icon(
-                        onPressed:
-                            state.selected == null ||
-                                state.terminating ||
-                                state.refreshing ||
-                                !state.ready ||
-                                state.storageError != null ||
-                                state.selected!.identity == null ||
-                                state.selected!.pid <= 0 ||
-                                state.selected!.pid == pid ||
-                                state.selected!.status == 'Exited'
-                            ? null
-                            : () => _confirm(state.selected!),
+                        onPressed: canTerminate
+                            ? () => _confirm(selected)
+                            : null,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFEEAB9A),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
+                          backgroundColor: c.danger,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: c.danger.withValues(
+                            alpha: .18,
                           ),
+                          disabledForegroundColor: c.textTertiary,
                         ),
-                        icon: const Icon(Icons.stop_circle_outlined, size: 17),
+                        icon: const Icon(Icons.stop_circle_outlined, size: 15),
                         label: Text(
                           state.terminating
                               ? 'Confirming exit…'
@@ -330,277 +389,191 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        const Text(
-          'Process identities are checked again before termination. Only confirmed exits create audit events.',
-          style: TextStyle(fontSize: 11, color: AppTheme.muted),
-        ),
       ],
     );
   }
 
   Widget _tableHeading(ManagerState state, ManagerController controller) =>
       Container(
-        color: const Color(0xFF111B24),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        height: 34,
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
         child: Row(
           children: [
-            const SizedBox(width: 38),
+            const SizedBox(width: 2),
             Expanded(
-              child: _sortButton('PROCESS NAME', false, state, controller),
-            ),
-            SizedBox(
-              width: 105,
-              child: _sortButton('PID', true, state, controller),
-            ),
-            const SizedBox(
-              width: 118,
-              child: Text(
-                'STATUS',
-                style: TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: 10,
-                  letterSpacing: 1.3,
-                ),
+              child: _SortHeader(
+                label: 'Name',
+                active: !state.sortPid,
+                ascending: state.ascending,
+                onTap: () => controller.sort(false),
               ),
             ),
+            SizedBox(
+              width: 100,
+              child: _SortHeader(
+                label: 'PID',
+                alignEnd: true,
+                active: state.sortPid,
+                ascending: state.ascending,
+                onTap: () => controller.sort(true),
+              ),
+            ),
+            const SizedBox(width: 24),
+            const SizedBox(width: 110, child: TableLabel('Status')),
           ],
         ),
       );
-  Widget _sortButton(
-    String label,
-    bool byPid,
-    ManagerState state,
-    ManagerController controller,
-  ) => Align(
-    alignment: Alignment.centerLeft,
-    child: TextButton(
-      onPressed: () => controller.sort(byPid),
-      style: TextButton.styleFrom(
-        padding: EdgeInsets.zero,
-        foregroundColor: AppTheme.muted,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 10, letterSpacing: 1.2)),
-          const SizedBox(width: 6),
-          Icon(
-            state.sortPid == byPid
-                ? (state.ascending ? Icons.arrow_upward : Icons.arrow_downward)
-                : Icons.unfold_more,
-            size: 13,
-          ),
-        ],
-      ),
-    ),
-  );
-  Widget _processRow(
-    LocalProcess process,
-    ManagerState state,
-    ManagerController controller,
-  ) {
-    final selected = state.selected?.sameIdentity(process) ?? false;
-    return Semantics(
-      selected: selected,
-      button: true,
-      label: '${process.name}, PID ${process.pid}',
-      child: Material(
-        color: selected
-            ? AppTheme.mint.withValues(alpha: .08)
-            : Colors.transparent,
-        child: InkWell(
-          key: ValueKey('process-${process.pid}'),
-          onTap: () => controller.select(selected ? null : process),
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).dividerColor.withValues(alpha: .6),
-                ),
-              ),
-            ),
-            child: Row(
+
+  Widget _history(ManagerState state) {
+    final c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(
               children: [
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                  size: 17,
-                  color: selected ? AppTheme.mint : AppTheme.muted,
+                Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: const Row(
+                    children: [
+                      Expanded(child: TableLabel('Process')),
+                      SizedBox(
+                        width: 100,
+                        child: TableLabel('PID', alignEnd: true),
+                      ),
+                      SizedBox(width: 24),
+                      SizedBox(width: 210, child: TableLabel('Exit confirmed')),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 21),
+                const Divider(),
                 Expanded(
-                  child: Text(
-                    process.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 105,
-                  child: Text(
-                    '${process.pid}',
-                    style: const TextStyle(
-                      color: AppTheme.muted,
-                      fontSize: 13,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 118,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: StatusPill(
-                      process.pid == pid ? 'This app' : process.status,
-                      color: process.status == 'Running'
-                          ? AppTheme.mint
-                          : AppTheme.muted,
-                    ),
-                  ),
+                  child: state.history.isEmpty
+                      ? (state.historyLoading
+                            ? const SkeletonRows(rows: 3)
+                            : EmptyState(
+                                title: state.historyError != null
+                                    ? 'History unavailable'
+                                    : 'No termination events yet',
+                                message: state.historyError != null
+                                    ? 'Start the Rails API and refresh to load persisted history.'
+                                    : 'Confirmed terminations appear here after the API accepts their audit events.',
+                                icon: Icons.history_rounded,
+                              ))
+                      : ListView.builder(
+                          itemCount: state.history.length,
+                          itemExtent: 38,
+                          itemBuilder: (context, index) {
+                            final event = state.history[index];
+                            return _HoverRow(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        event.processName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 100,
+                                      child: Text(
+                                        '${event.pid}',
+                                        textAlign: TextAlign.end,
+                                        style: AppText.mono.copyWith(
+                                          color: c.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 24),
+                                    SizedBox(
+                                      width: 210,
+                                      child: Text(
+                                        _utc(event.occurredAt),
+                                        style: AppText.mono.copyWith(
+                                          color: c.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _history(ManagerState state) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (state.historyError != null)
-        _Notice(state.historyError!, warning: true),
-      Expanded(
-        child: SectionCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.verified_outlined,
-                      color: AppTheme.mint,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        'Recent confirmed terminations',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    if (state.historyLoading)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: state.history.isEmpty
-                    ? _PanelEmpty(
-                        title: state.historyLoading
-                            ? 'Loading audit history…'
-                            : state.historyError != null
-                            ? 'History unavailable'
-                            : 'No termination events yet',
-                        message: state.historyError != null
-                            ? 'Start the Rails API and refresh to load persisted history.'
-                            : 'Confirmed terminations appear here after the API accepts their audit events.',
-                        icon: Icons.history_rounded,
-                      )
-                    : ListView.separated(
-                        itemCount: state.history.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (_, index) {
-                          final event = state.history[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            leading: const Icon(
-                              Icons.check_circle_outline,
-                              color: AppTheme.mint,
-                            ),
-                            title: Text(
-                              event.processName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              'PID ${event.pid}  ·  ${_utc(event.occurredAt)}',
-                              style: const TextStyle(
-                                color: AppTheme.muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                            trailing: const StatusPill('Recorded'),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'Latest 30 events · newest exit first · occurrence times shown in UTC',
-        style: TextStyle(fontSize: 11, color: AppTheme.muted),
-      ),
-    ],
-  );
-
   Future<void> _confirm(LocalProcess process) async {
+    final c = context.colors;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Terminate this process?'),
         content: SizedBox(
-          width: 430,
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                process.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: c.background,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: c.hairline),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        process.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'PID ${process.pid}',
+                      style: AppText.mono.copyWith(color: c.textSecondary),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'PID ${process.pid}',
-                style: const TextStyle(color: AppTheme.mint),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               const Text(
-                'Unsaved work may be lost. Only this process is targeted, using your current permissions.',
+                'Unsaved work in this process may be lost. Only this process is '
+                'targeted, using your current permissions.',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 Platform.isWindows
                     ? 'Windows terminates the process through the same handle used to verify its creation time.'
                     : 'macOS sends SIGTERM and waits up to 4 seconds for exit. PID reuse between verification and signaling cannot be fully prevented; creation times have one-second precision.',
-                style: const TextStyle(
-                  color: AppTheme.muted,
-                  fontSize: 12,
-                  height: 1.6,
-                ),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
@@ -608,12 +581,14 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(foregroundColor: c.textSecondary),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFEEAB9A),
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
             ),
             child: const Text('Confirm termination'),
           ),
@@ -626,109 +601,170 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   }
 }
 
-class _PanelEmpty extends StatelessWidget {
-  const _PanelEmpty({
-    required this.title,
-    required this.message,
-    required this.icon,
-  });
-  final String title, message;
-  final IconData icon;
-  @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      child: EmptyState(title: title, message: message, icon: icon),
-    ),
-  );
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
+class _SortHeader extends StatelessWidget {
+  const _SortHeader({
     required this.label,
-    required this.value,
-    required this.detail,
-    required this.icon,
+    required this.active,
+    required this.ascending,
+    required this.onTap,
+    this.alignEnd = false,
   });
-  final String label, value, detail;
-  final IconData icon;
+  final String label;
+  final bool active, ascending, alignEnd;
+  final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => SectionCard(
-    padding: const EdgeInsets.all(18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Align(
+      alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 9,
-                  color: AppTheme.muted,
-                  letterSpacing: 1.3,
+                style: AppText.label(context)
+                    .copyWith(color: active ? c.text : c.textTertiary),
+              ),
+              const SizedBox(width: 4),
+              AnimatedRotation(
+                duration: AppMotion.normal,
+                curve: AppMotion.curve,
+                turns: ascending ? 0 : .5,
+                child: Icon(
+                  Icons.arrow_upward_rounded,
+                  size: 12,
+                  color: active ? c.text : Colors.transparent,
                 ),
               ),
-            ),
-            Icon(icon, size: 18, color: AppTheme.mint),
-          ],
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          detail,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11, color: AppTheme.muted),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
-class _Notice extends StatelessWidget {
-  const _Notice(this.message, {this.warning = false});
-  final String message;
-  final bool warning;
+/// Row hover highlight for read-only tables.
+class _HoverRow extends StatefulWidget {
+  const _HoverRow({required this.child});
+  final Widget child;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: (warning ? const Color(0xFFEEAB9A) : AppTheme.mint).withValues(
-          alpha: .08,
+  State<_HoverRow> createState() => _HoverRowState();
+}
+
+class _HoverRowState extends State<_HoverRow> {
+  var _hovered = false;
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        decoration: BoxDecoration(
+          color: _hovered ? c.hover : Colors.transparent,
+          border: Border(bottom: BorderSide(color: c.hairline)),
         ),
-        borderRadius: BorderRadius.circular(10),
+        child: widget.child,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            warning ? Icons.info_outline : Icons.check_circle_outline,
-            size: 17,
-            color: warning ? const Color(0xFFEEAB9A) : AppTheme.mint,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: 12,
-                color: warning ? const Color(0xFFEEAB9A) : AppTheme.mint,
+    );
+  }
+}
+
+class _ProcessRow extends StatelessWidget {
+  const _ProcessRow({
+    required this.process,
+    required this.selected,
+    required this.ownPid,
+    required this.onTap,
+  });
+  final LocalProcess process;
+  final bool selected;
+  final int ownPid;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isSelf = process.pid == ownPid;
+    final statusColor = isSelf
+        ? c.accent
+        : switch (process.status) {
+            'Running' => c.success,
+            'Protected' => c.warning,
+            _ => c.textTertiary,
+          };
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: '${process.name}, PID ${process.pid}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('process-${process.pid}'),
+          onTap: onTap,
+          hoverColor: c.hover,
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            decoration: BoxDecoration(
+              color: selected ? c.selection : Colors.transparent,
+              border: Border(
+                left: BorderSide(
+                  color: selected ? c.accent : Colors.transparent,
+                  width: 2,
+                ),
+                bottom: BorderSide(color: c.hairline),
               ),
             ),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    process.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: process.status == 'Exited'
+                          ? c.textTertiary
+                          : c.text,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    '${process.pid}',
+                    textAlign: TextAlign.end,
+                    style: AppText.mono.copyWith(color: c.textSecondary),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                SizedBox(
+                  width: 110,
+                  child: StatusPill(
+                    isSelf ? 'This app' : process.status,
+                    color: statusColor,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 String _time(DateTime value) =>
     '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
 String _utc(DateTime value) =>
-    '${value.toUtc().toIso8601String().substring(0, 10)}  ${_time(value.toUtc())} UTC';
+    '${value.toUtc().toIso8601String().substring(0, 10)} ${_time(value.toUtc())} UTC';

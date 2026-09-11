@@ -110,7 +110,7 @@ These are development artifacts, without verified Developer ID signing/notarizat
 
 ## Screenshot provenance
 
-The README previews are the actual production Flutter widgets rendered with injected synthetic records, a bundled OFL Inter font, and Material icons. They contain no private machine/network data. They demonstrate implemented UI rendering, not live OS operation or Windows manual testing.
+The README previews are the actual production Flutter widgets rendered in the dark theme with injected synthetic records, the bundled OFL Inter and JetBrains Mono fonts, and Material icons. They contain no private machine/network data. They demonstrate implemented UI rendering, not live OS operation or Windows manual testing.
 
 From each app, on the rendering host:
 

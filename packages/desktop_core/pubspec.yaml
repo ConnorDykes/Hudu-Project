@@ -15,7 +15,11 @@ dev_dependencies:
 flutter:
   assets:
     - assets/fonts/OFL.txt
+    - assets/fonts/JetBrainsMono-OFL.txt
   fonts:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter.ttf
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf

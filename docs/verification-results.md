@@ -45,6 +45,10 @@ A second review pass focused on production readiness rather than features. Chang
 - **Evidence:** Rails **41 tests / 447 assertions**, RuboCop, Brakeman, and Zeitwerk clean. Flutter **9 shared + 41 network + 39 process = 89 tests**, analysis clean. Both opt-in real-Rails smoke suites pass against a local server. A live `POST /lookups` returned the Apple vendor in 343 ms and the cached repeat in 7 ms; 400/404/422 envelopes were checked by hand. Both apps were launched on macOS against the running API.
 - **Not changed:** the Docker image still runs as root because Docker was unavailable on the review host; adding a non-root user is the next container hardening step. SQLite remains the store; `DATABASE_URL` switches adapters without code changes once the matching gem is added.
 
+## Design pass (September 10, 2026)
+
+The first-pass UI was rebuilt as a quiet desktop utility: neutral graphite/paper surfaces that follow the system theme, one blue accent, hairline borders, sentence-case labels, Inter plus bundled JetBrains Mono for identifiers, and status shown as a dot and a word. Taglines, explainer cards, metric tiles, and per-row badges were removed; the header names the view and carries only its actions. Motion is limited to 120–260 ms eased cross-fades between result states, hover and selection transitions, a spinning refresh glyph, a thin busy bar, and skeleton rows while history loads. Controllers, repositories, and adapters were not changed. All widget suites pass against the new UI (9 shared, 41 network, 39 process); the README previews are regenerated dark-theme goldens.
+
 ## Remaining boundaries
 
 - Interactive native GUI inspection was blocked by the locked Mac. No lock bypass was attempted. Neither Mac interactive review nor Windows manual GUI testing is claimed.

@@ -19,6 +19,8 @@ void main() {
       await loadTestFonts();
       tester.view.physicalSize = const Size(1440, 1000);
       tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final container = ProviderContainer(

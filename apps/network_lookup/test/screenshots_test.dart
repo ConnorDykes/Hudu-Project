@@ -18,11 +18,20 @@ void main() {
           rootBundle.load('packages/desktop_core/assets/fonts/Inter.ttf'),
         );
       await font.load();
+      final mono = FontLoader('packages/desktop_core/JetBrainsMono')
+        ..addFont(
+          rootBundle.load(
+            'packages/desktop_core/assets/fonts/JetBrainsMono-Regular.ttf',
+          ),
+        );
+      await mono.load();
       final icons = FontLoader('MaterialIcons')
         ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
       await icons.load();
       tester.view.physicalSize = const Size(1440, 1200);
       tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(

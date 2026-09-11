@@ -29,6 +29,13 @@ void main() {
       'packages/desktop_core/Inter',
     )..addFont(rootBundle.load('packages/desktop_core/assets/fonts/Inter.ttf'));
     await font.load();
+    final mono = FontLoader('packages/desktop_core/JetBrainsMono')
+      ..addFont(
+        rootBundle.load(
+          'packages/desktop_core/assets/fonts/JetBrainsMono-Regular.ttf',
+        ),
+      );
+    await mono.load();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -74,7 +81,10 @@ void main() {
     (tester) async {
       final repo = FakeLookupRepository();
       await mount(tester, repository: repo);
-      expect(find.text('A little clarity starts with an IP.'), findsOneWidget);
+      expect(
+        find.textContaining('Enter a local IPv4 address to resolve'),
+        findsOneWidget,
+      );
       await tester.enterText(find.byKey(const Key('ip-input')), '192.168.1.24');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
@@ -186,7 +196,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('History save unconfirmed'), findsOneWidget);
       expect(find.text(exampleResolution.mac), findsOneWidget);
-      await tester.tap(find.text('Recent history'));
+      await tester.tap(find.text('History'));
       await tester.pumpAndSettle();
       expect(find.text('History is unavailable'), findsOneWidget);
       expect(find.text('Retry history'), findsOneWidget);
@@ -201,7 +211,7 @@ void main() {
         repository: FakeLookupRepository(records: exampleHistory),
         size: const Size(1440, 1000),
       );
-      await tester.tap(find.text('Recent history'));
+      await tester.tap(find.text('History'));
       await tester.pumpAndSettle();
       expect(find.text('Saved lookups'), findsOneWidget);
       expect(find.text('Example Networks'), findsOneWidget);
