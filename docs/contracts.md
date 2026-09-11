@@ -14,6 +14,10 @@ Unknown vendor: `201`, same record with `vendor:null,status:"unknown"` (a comple
 
 `GET /lookups?limit=30&offset=0`: `{"data":[...records],"meta":{"limit":30,"offset":0,"total":1}}`; order created_at desc then id desc. Default limit 30, max 100, offset >=0; invalid pagination 422.
 
+## Vendors
+
+`POST /vendors`: `{"mac":"02:11:22:33:44:55","name":"Lab sensor"}` or `{"oui":"02:11:22","name":"Lab sensor"}`. Stored by uppercase colon OUI with `source` `user`. `201`: `{"data":{"id":1,"oui":"02:11:22","name":"Lab sensor","source":"user","created_at":"…"}}`; OUI already registered `409` code `vendor_exists` with the existing record in `data`; invalid input `422`. `GET /vendors?limit=&offset=` lists vendors by name in the pagination envelope. Lookups consult this table (seeded OUIs plus user vendors) before the public provider.
+
 ## Process events
 
 `POST /process_events`: `{"event_id":"UUID","process_name":"sleep","pid":123,"occurred_at":"2026-09-10T18:00:00.000Z"}`. Occurrence time is confirmed exit time, not audit transmission time. Response `201`: `{"data":{"id":1,"event_id":"UUID","process_name":"sleep","pid":123,"occurred_at":"2026-09-10T18:00:00.000Z","created_at":"2026-09-10T18:00:01.000Z"}}`. Identical duplicate event ID returns existing record with `200`; ID reused with differing attributes returns `409` code `event_conflict`. Database unique index enforces event ID uniqueness. Invalid input `422`.

@@ -46,6 +46,19 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
     ref.invalidate(interfacesProvider);
   }
 
+  /// Lets the user name a vendor for a MAC that no source recognized.
+  Future<void> _nameVendor() async {
+    final mac = ref.read(lookupControllerProvider).resolution?.mac;
+    if (mac == null) return;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _VendorNameDialog(oui: mac.substring(0, 8)),
+    );
+    if (name != null && name.trim().isNotEmpty && mounted) {
+      await ref.read(lookupControllerProvider.notifier).nameVendor(name);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(lookupControllerProvider);
@@ -121,7 +134,10 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
                     '${state.phase}-${state.record?.id}-'
                     '${state.resolution?.mac}-${state.message}',
                   ),
-                  child: LookupResultCard(state: state),
+                  child: LookupResultCard(
+                    state: state,
+                    onNameVendor: state.canNameVendor ? _nameVendor : null,
+                  ),
                 ),
               ),
             ),
@@ -152,6 +168,63 @@ class _NetworkLookupPageState extends ConsumerState<NetworkLookupPage> {
       ),
     );
   }
+}
+
+class _VendorNameDialog extends StatefulWidget {
+  const _VendorNameDialog({required this.oui});
+  final String oui;
+  @override
+  State<_VendorNameDialog> createState() => _VendorNameDialogState();
+}
+
+class _VendorNameDialogState extends State<_VendorNameDialog> {
+  final _name = TextEditingController();
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Name this vendor'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Applies to every address starting with ${widget.oui} and is '
+            'saved by the API for future lookups.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            key: const Key('vendor-name-input'),
+            controller: _name,
+            autofocus: true,
+            maxLength: 255,
+            decoration: const InputDecoration(
+              hintText: 'Vendor name, for example Lab sensor',
+              counterText: '',
+            ),
+            onSubmitted: (value) => Navigator.pop(context, value),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _name.text),
+        child: const Text('Save vendor'),
+      ),
+    ],
+  );
 }
 
 /// Optional challenge: detect the machine's primary active IPv4 address.
@@ -228,8 +301,11 @@ class _OwnAddressRow extends StatelessWidget {
 
 /// The result panel. Its content is keyed by phase so state changes cross-fade.
 class LookupResultCard extends StatelessWidget {
-  const LookupResultCard({super.key, required this.state});
+  const LookupResultCard({super.key, required this.state, this.onNameVendor});
   final LookupState state;
+
+  /// Offered when the lookup completed but no source knew the vendor.
+  final VoidCallback? onNameVendor;
 
   @override
   Widget build(BuildContext context) {
@@ -263,12 +339,11 @@ class LookupResultCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              state.phase == LookupPhase.discovering
-                  ? 'Reading the local network cache…'
-                  : 'Identifying vendor & saving lookup…',
-              style: theme.textTheme.titleSmall,
-            ),
+            Text(switch (state.phase) {
+              LookupPhase.discovering => 'Reading the local network cache…',
+              LookupPhase.naming => 'Saving vendor name…',
+              _ => 'Identifying vendor & saving lookup…',
+            }, style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             Text(
               state.ip ?? '',
@@ -381,13 +456,26 @@ class LookupResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Text(
-            record == null
-                ? 'History save unconfirmed · check the history below before repeating.'
-                : 'Saved to history · ${formatTimestamp(record.createdAt)}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: record == null ? c.warning : c.textTertiary,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  record == null
+                      ? 'History save unconfirmed · check the history below before repeating.'
+                      : 'Saved to history · ${formatTimestamp(record.createdAt)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: record == null ? c.warning : c.textTertiary,
+                  ),
+                ),
+              ),
+              if (onNameVendor != null)
+                OutlinedButton.icon(
+                  key: const Key('name-vendor-button'),
+                  onPressed: onNameVendor,
+                  icon: const Icon(Icons.label_outline_rounded, size: 15),
+                  label: const Text('Name this vendor'),
+                ),
+            ],
           ),
           if (state.message != null) ...[
             const SizedBox(height: 10),

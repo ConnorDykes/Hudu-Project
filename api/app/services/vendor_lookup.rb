@@ -1,6 +1,7 @@
 require "net/http"
 
-# Resolves a normalized MAC through the public MACVendors service.
+# Resolves a normalized MAC: the local vendors table (seeded OUIs and
+# user-named vendors) answers first, then the public MACVendors service.
 #
 # Resolved and unknown outcomes are cached so repeated lookups of the same
 # device do not consume the provider's rate limit; provider failures are never
@@ -18,6 +19,9 @@ class VendorLookup
   def call(mac)
     # Only normalized MACs can reach the fixed provider host; never accept a URL.
     raise ArgumentError, "Expected a normalized MAC" unless mac.match?(Lookup::NORMALIZED_FORMAT)
+    if (local = Vendor.for_mac(mac))
+      return Result.new(status: "resolved", vendor: local.name, http_status: 201, error_code: nil, message: nil)
+    end
     cached = Rails.cache.read(cache_key(mac))
     return Result.new(**cached) if cached
 

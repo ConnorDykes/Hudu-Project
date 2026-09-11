@@ -33,7 +33,7 @@ class ManagerState {
     this.processes = const [],
     this.history = const [],
     this.pending = const [],
-    this.selected,
+    this.selection = const [],
     this.query = '',
     this.sortPid = false,
     this.ascending = true,
@@ -52,7 +52,9 @@ class ManagerState {
   });
   final List<LocalProcess> processes;
   final List<AuditEvent> history, pending;
-  final LocalProcess? selected;
+
+  /// Processes chosen for a batch action, matched by identity not by PID.
+  final List<LocalProcess> selection;
   final String query;
   final bool sortPid,
       ascending,
@@ -64,6 +66,7 @@ class ManagerState {
   final int interval;
   final DateTime? updatedAt;
   final String? processError, historyError, auditError, storageError, notice;
+
   List<LocalProcess> get visible {
     final q = query.trim().toLowerCase();
     final rows = processes
@@ -82,12 +85,24 @@ class ManagerState {
     return rows;
   }
 
+  bool isSelected(LocalProcess process) => selection.any(process.sameIdentity);
+
+  /// Whether the app may attempt to terminate [process] right now.
+  bool canTerminate(LocalProcess process) =>
+      ready &&
+      !terminating &&
+      !refreshing &&
+      storageError == null &&
+      process.identity != null &&
+      process.pid > 0 &&
+      process.pid != pid &&
+      process.status != 'Exited';
+
   ManagerState copy({
     List<LocalProcess>? processes,
     List<AuditEvent>? history,
     List<AuditEvent>? pending,
-    LocalProcess? selected,
-    bool clearSelection = false,
+    List<LocalProcess>? selection,
     String? query,
     bool? sortPid,
     bool? ascending,
@@ -111,7 +126,7 @@ class ManagerState {
     processes: processes ?? this.processes,
     history: history ?? this.history,
     pending: pending ?? this.pending,
-    selected: clearSelection ? null : selected ?? this.selected,
+    selection: selection ?? this.selection,
     query: query ?? this.query,
     sortPid: sortPid ?? this.sortPid,
     ascending: ascending ?? this.ascending,
@@ -182,12 +197,15 @@ class ManagerController extends Notifier<ManagerState> {
     try {
       final rows = await _adapter.list();
       if (!ref.mounted) return;
-      final selection = state.selected;
+      // Keep only selected processes that still exist with the same identity.
+      final selection = state.selection
+          .where((p) => rows.any(p.sameIdentity))
+          .toList();
       state = state.copy(
         processes: rows,
         refreshing: false,
         updatedAt: _now(),
-        clearSelection: selection != null && !rows.any(selection.sameIdentity),
+        selection: selection,
       );
     } catch (_) {
       if (ref.mounted) {
@@ -236,10 +254,28 @@ class ManagerController extends Notifier<ManagerState> {
     sortPid: byPid,
     ascending: state.sortPid == byPid ? !state.ascending : true,
   );
-  void select(LocalProcess? process) {
-    if (!state.terminating) {
-      state = state.copy(selected: process, clearSelection: process == null);
-    }
+
+  /// Toggles [process] in the batch selection.
+  void select(LocalProcess process) {
+    if (state.terminating) return;
+    state = state.copy(
+      selection: state.isSelected(process)
+          ? state.selection.where((p) => !p.sameIdentity(process)).toList()
+          : [...state.selection, process],
+    );
+  }
+
+  /// Selects every row in [rows] that can be terminated, or clears when all
+  /// of them are already selected.
+  void selectAll(List<LocalProcess> rows) {
+    if (state.terminating) return;
+    final eligible = rows.where((p) => p.identity != null).toList();
+    final allSelected = eligible.isNotEmpty && eligible.every(state.isSelected);
+    state = state.copy(selection: allSelected ? const [] : eligible);
+  }
+
+  void clearSelection() {
+    if (!state.terminating) state = state.copy(selection: const []);
   }
 
   void setInterval(int seconds) {
@@ -253,7 +289,13 @@ class ManagerController extends Notifier<ManagerState> {
     }
   }
 
-  Future<void> terminate(LocalProcess confirmed) async {
+  /// Terminates one process after re-checking its identity.
+  Future<void> terminate(LocalProcess process) => terminateAll([process]);
+
+  /// Terminates each process in turn. Every confirmed exit is audited on its
+  /// own; a refusal for one process never stops the others.
+  Future<void> terminateAll(List<LocalProcess> processes) async {
+    if (processes.isEmpty) return;
     if (state.refreshing) {
       state = state.copy(
         notice: 'Refresh is in progress. Wait for it to finish, then confirm termination again.',
@@ -263,69 +305,105 @@ class ManagerController extends Notifier<ManagerState> {
     if (state.terminating || !state.ready || state.storageError != null) {
       return;
     }
-    if (state.selected?.sameIdentity(confirmed) != true) {
-      state = state.copy(
-        notice:
-            'Selection changed. Select the process again before terminating.',
-      );
-      return;
-    }
     state = state.copy(terminating: true, notice: 'Checking process identity…');
+    final outcomes = <LocalProcess, ExitOutcome>{};
+    Object? failure;
     try {
       // Fail before an irreversible action when storage is already unavailable.
       await _outbox.prepare();
-      final outcome = await _adapter.terminate(confirmed);
-      if (outcome == ExitOutcome.terminated) {
-        // Capture milliseconds: Rails serializes occurrence times to milliseconds.
-        final event = AuditEvent(
-          eventId: const Uuid().v4(),
-          processName: confirmed.name,
-          pid: confirmed.pid,
-          occurredAt: DateTime.fromMillisecondsSinceEpoch(
-            _now().millisecondsSinceEpoch,
-            isUtc: true,
-          ),
-        );
-        // Persist even if the UI was disposed while waiting for the native exit.
-        String? storageError;
+      for (final process in processes) {
         try {
-          await _outbox.put(event);
-        } catch (_) {
-          storageError = 'Process terminated, but its audit could not be saved to disk. Keep this app open and retry delivery.';
+          outcomes[process] = await _terminateOne(process);
+        } catch (error) {
+          failure ??= error;
         }
         if (!ref.mounted) return;
-        state = state.copy(
-          pending: [...state.pending, event],
-          clearSelection: true,
-          storageError: storageError,
-          notice:
-              '${confirmed.name} (PID ${confirmed.pid}) terminated. Exit confirmed.',
-        );
-      } else {
-        if (!ref.mounted) return;
-        state = state.copy(
-          notice: switch (outcome) {
-            ExitOutcome.alreadyExited =>
-              'This process already exited. No termination audit was created.',
-            ExitOutcome.identityChanged => 'Process identity changed. Termination refused; refresh and select again.',
-            ExitOutcome.accessDenied => 'Access denied. The process was not terminated. This app does not elevate permissions.',
-            ExitOutcome.notExiting => 'Exit was not confirmed within 4 seconds. The process may still be running; no audit was created.',
-            ExitOutcome.forbidden => 'This PID is protected. The app cannot terminate itself or a nonpositive PID.',
-            ExitOutcome.terminated => '',
-          },
-        );
       }
     } catch (error) {
+      failure ??= error;
+    } finally {
       if (ref.mounted) {
         state = state.copy(
-          notice: 'Termination was not confirmed. ${_message(error)}',
+          terminating: false,
+          notice: _summarize(outcomes, failure),
         );
       }
-    } finally {
-      if (ref.mounted) state = state.copy(terminating: false);
     }
     if (!ref.mounted) return;
     await Future.wait([refresh(), retryAudits()]);
+  }
+
+  Future<ExitOutcome> _terminateOne(LocalProcess process) async {
+    final outcome = await _adapter.terminate(process);
+    if (outcome != ExitOutcome.terminated) return outcome;
+    // Capture milliseconds: Rails serializes occurrence times to milliseconds.
+    final event = AuditEvent(
+      eventId: const Uuid().v4(),
+      processName: process.name,
+      pid: process.pid,
+      occurredAt: DateTime.fromMillisecondsSinceEpoch(
+        _now().millisecondsSinceEpoch,
+        isUtc: true,
+      ),
+    );
+    // Persist even if the UI was disposed while waiting for the native exit.
+    String? storageError;
+    try {
+      await _outbox.put(event);
+    } catch (_) {
+      storageError = 'Process terminated, but its audit could not be saved to disk. Keep this app open and retry delivery.';
+    }
+    if (ref.mounted) {
+      state = state.copy(
+        pending: [...state.pending, event],
+        selection: state.selection
+            .where((p) => !p.sameIdentity(process))
+            .toList(),
+        storageError: storageError,
+      );
+    }
+    return outcome;
+  }
+
+  String _summarize(Map<LocalProcess, ExitOutcome> outcomes, Object? failure) {
+    if (outcomes.length == 1 && failure == null) {
+      final entry = outcomes.entries.single;
+      return switch (entry.value) {
+        ExitOutcome.terminated =>
+          '${entry.key.name} (PID ${entry.key.pid}) terminated. Exit confirmed.',
+        ExitOutcome.alreadyExited =>
+          'This process already exited. No termination audit was created.',
+        ExitOutcome.identityChanged => 'Process identity changed. Termination refused; refresh and select again.',
+        ExitOutcome.accessDenied => 'Access denied. The process was not terminated. This app does not elevate permissions.',
+        ExitOutcome.notExiting => 'Exit was not confirmed within 4 seconds. The process may still be running; no audit was created.',
+        ExitOutcome.forbidden => 'This PID is protected. The app cannot terminate itself or a nonpositive PID.',
+      };
+    }
+    final terminated = outcomes.values
+        .where((o) => o == ExitOutcome.terminated)
+        .length;
+    final parts = <String>[
+      '$terminated of ${outcomes.length + (failure == null ? 0 : 1)} processes terminated. Exit confirmed.',
+    ];
+    for (final outcome in ExitOutcome.values) {
+      if (outcome == ExitOutcome.terminated) continue;
+      final count = outcomes.values.where((o) => o == outcome).length;
+      if (count == 0) continue;
+      parts.add(
+        '$count ${switch (outcome) {
+          ExitOutcome.alreadyExited => 'already exited',
+          ExitOutcome.identityChanged => 'changed identity and were refused',
+          ExitOutcome.accessDenied => 'denied access',
+          ExitOutcome.notExiting => 'did not confirm exit within 4 seconds',
+          ExitOutcome.forbidden => 'protected',
+          ExitOutcome.terminated => '',
+        }}.',
+      );
+    }
+    if (failure != null) {
+      parts.add('One was not confirmed. ${_message(failure)}');
+    }
+    return parts.join(' ');
   }
 
   Future<void> retryAudits() async {

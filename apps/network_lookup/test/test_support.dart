@@ -80,6 +80,14 @@ class FakeLookupRepository implements LookupRepository {
   final Object? failure;
   final LookupSubmission? submission;
   int submitCalls = 0;
+  final vendors = <String, String>{};
+  Object? vendorFailure;
+  @override
+  Future<void> createVendor(String mac, String name) async {
+    if (vendorFailure != null) throw vendorFailure!;
+    vendors[mac] = name;
+  }
+
   @override
   Future<List<LookupRecord>> history() async {
     if (failure != null) throw failure!;

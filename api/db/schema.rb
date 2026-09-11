@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_10_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_11_000003) do
   create_table "lookups", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "ip"
@@ -32,5 +32,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_10_000002) do
     t.index ["event_id"], name: "index_process_events_on_event_id", unique: true
     t.index ["occurred_at", "id"], name: "index_process_events_on_occurred_at_and_id"
     t.check_constraint "pid > 0", name: "process_event_positive_pid"
+  end
+
+  create_table "vendors", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "oui", null: false
+    t.string "source", default: "user", null: false
+    t.datetime "updated_at", null: false
+    t.index ["oui"], name: "index_vendors_on_oui", unique: true
+    t.check_constraint "source IN ('seed', 'user')", name: "vendor_source"
   end
 end

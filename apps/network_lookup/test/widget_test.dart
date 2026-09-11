@@ -178,6 +178,29 @@ void main() {
     expect(find.textContaining('Saved to history'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('unknown vendor offers naming and repeats the lookup', (
+    tester,
+  ) async {
+    final repo = FakeLookupRepository(
+      submission: LookupSubmission(record: exampleHistory.last),
+    );
+    await mount(tester, repository: repo);
+    await tester.enterText(find.byKey(const Key('ip-input')), '192.168.1.82');
+    await tester.tap(find.byKey(const Key('lookup-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('name-vendor-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Name this vendor'), findsWidgets);
+    await tester.enterText(
+      find.byKey(const Key('vendor-name-input')),
+      'Lab sensor',
+    );
+    await tester.tap(find.text('Save vendor'));
+    await tester.pumpAndSettle();
+    expect(repo.vendors, {exampleResolution.mac: 'Lab sensor'});
+    expect(repo.submitCalls, 2);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'API down shows local MAC, unconfirmed save, and retryable history',
     (tester) async {

@@ -58,6 +58,11 @@ The apps and API were re-read against the brief and trimmed to what it asks for:
 - **Rails** now also serves `GET /lookups?mac=...` as the brief illustrates, alongside the client's `POST /lookups`; demo seeds were removed.
 - **Shell** hides the sidebar when there is only one view. Evidence: Rails **40 tests**, RuboCop and Brakeman clean; Flutter **9 + 41 + 40 = 90 tests**, analysis clean; goldens regenerated.
 
+## Feature pass (September 10, 2026)
+
+- **Local vendors:** a `vendors` table keyed by OUI answers lookups before the public provider. `db/seeds.rb` loads about thirty IEEE OUI registrations for common manufacturers idempotently; `POST /vendors` lets a user name a vendor for a MAC that nothing recognized, and the desktop app offers this after an `unknown` result, then repeats the lookup. Rails **46 tests / 502 assertions**, RuboCop and Brakeman clean.
+- **Batch termination:** Process Manager rows have a checkbox and an inline Terminate button; a select-all header checkbox and a footer action terminate the selection in one confirmed pass. Each confirmed exit is audited on its own and one refusal never stops the others. The Status column was removed; protected, exited, and self rows are annotated inline and cannot be terminated. Flutter **9 + 45 + 44 = 98 tests**, analysis clean; goldens regenerated.
+
 ## Remaining boundaries
 
 - Interactive native GUI inspection was blocked by the locked Mac. No lock bypass was attempted. Neither Mac interactive review nor Windows manual GUI testing is claimed.

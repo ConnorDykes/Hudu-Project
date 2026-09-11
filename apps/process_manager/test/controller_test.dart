@@ -177,16 +177,60 @@ void main() {
       expect(container.read(managerProvider).visible.single.name, 'sleep');
       controller.select(processes.rows.first);
       await controller.refresh();
-      expect(container.read(managerProvider).selected, isNotNull);
+      expect(container.read(managerProvider).selection, isNotEmpty);
       processes.rows[0] = LocalProcess(
         pid: processes.rows[0].pid,
         name: processes.rows[0].name,
         identity: 'reused',
       );
       await controller.refresh();
-      expect(container.read(managerProvider).selected, isNull);
+      expect(container.read(managerProvider).selection, isEmpty);
     },
   );
+  test(
+    'toggle, select-all, clear, and batch termination audit each exit',
+    () async {
+      await controller.initialize();
+      final rows = container.read(managerProvider).visible;
+      controller.select(rows[0]);
+      controller.select(rows[1]);
+      controller.select(rows[0]);
+      expect(container.read(managerProvider).selection.single.pid, rows[1].pid);
+      controller.selectAll(rows);
+      expect(container.read(managerProvider).selection, hasLength(rows.length));
+      controller.selectAll(rows);
+      expect(container.read(managerProvider).selection, isEmpty);
+      controller.select(rows[0]);
+      controller.select(rows[1]);
+      await controller.terminateAll(container.read(managerProvider).selection);
+      expect(processes.kills, 2);
+      expect(outbox.events, isEmpty, reason: 'delivered to the fake API');
+      expect(audit.records.map((e) => e.pid).toSet(), {
+        rows[0].pid,
+        rows[1].pid,
+      });
+      expect(container.read(managerProvider).selection, isEmpty);
+      expect(
+        container.read(managerProvider).notice,
+        contains('2 of 2 processes terminated'),
+      );
+      controller.select(container.read(managerProvider).visible.first);
+      controller.clearSelection();
+      expect(container.read(managerProvider).selection, isEmpty);
+    },
+  );
+  test('a refused process in a batch does not stop the others', () async {
+    await controller.initialize();
+    final rows = container.read(managerProvider).visible;
+    final denied = LocalProcess(
+      pid: rows[0].pid,
+      name: rows[0].name,
+      identity: null,
+    );
+    await controller.terminateAll([denied, rows[1]]);
+    expect(processes.kills, 2, reason: 'adapter decides; both are attempted');
+    expect(container.read(managerProvider).notice, isNotEmpty);
+  });
   test('refresh is single flight and keeps stale rows on error', () async {
     await controller.initialize();
     processes.blocked = Completer();

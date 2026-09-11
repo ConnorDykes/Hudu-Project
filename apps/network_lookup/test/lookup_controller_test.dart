@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:desktop_core/desktop_core.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:network_lookup/lookup/lookup_controller.dart';
@@ -131,4 +133,46 @@ void main() {
       expect(repository.submitCalls, 0);
     },
   );
+  test('naming an unknown vendor saves it and repeats the lookup', () async {
+    final repository = FakeLookupRepository(
+      submission: LookupSubmission(record: exampleHistory.last),
+    );
+    final scope = container(FakeNetworkAdapter(), repository);
+    final controller = scope.read(lookupControllerProvider.notifier);
+    await controller.lookup('192.168.1.82');
+    expect(scope.read(lookupControllerProvider).canNameVendor, isTrue);
+    await controller.nameVendor('  Lab sensor ');
+    expect(repository.vendors, {exampleResolution.mac: 'Lab sensor'});
+    expect(repository.submitCalls, 2);
+    expect(scope.read(lookupControllerProvider).phase, LookupPhase.complete);
+  });
+  test('vendor save failure keeps the unknown result and explains', () async {
+    final repository =
+        FakeLookupRepository(
+            submission: LookupSubmission(record: exampleHistory.last),
+          )
+          ..vendorFailure = const ApiException(
+            'Vendor exists',
+            code: 'vendor_exists',
+          );
+    final scope = container(FakeNetworkAdapter(), repository);
+    final controller = scope.read(lookupControllerProvider.notifier);
+    await controller.lookup('192.168.1.82');
+    await controller.nameVendor('Lab sensor');
+    final state = scope.read(lookupControllerProvider);
+    expect(repository.submitCalls, 1);
+    expect(state.record!.status, VendorStatus.unknown);
+    expect(state.message, 'Vendor exists');
+    expect(state.canNameVendor, isTrue);
+  });
+  test('resolved lookups cannot be renamed', () async {
+    final repository = FakeLookupRepository();
+    final scope = container(FakeNetworkAdapter(), repository);
+    final controller = scope.read(lookupControllerProvider.notifier);
+    await controller.lookup('192.168.1.24');
+    expect(scope.read(lookupControllerProvider).canNameVendor, isFalse);
+    await controller.nameVendor('Nope');
+    expect(repository.vendors, isEmpty);
+    expect(repository.submitCalls, 1);
+  });
 }

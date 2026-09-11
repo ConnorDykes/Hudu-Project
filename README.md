@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **90 Flutter tests and 40 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **98 Flutter tests and 46 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 
@@ -22,10 +22,10 @@ Both applications and the API are implemented, with native macOS and Windows CI 
 | Capability | [Network Lookup](apps/network_lookup/) | [Process Manager](apps/process_manager/) |
 | --- | --- | --- |
 | Local operation | Validate IPv4; resolve MAC from local interfaces or ARP/neighbor data | List names and PIDs; sort, search, refresh |
-| Main workflow | Send the discovered MAC to Rails for vendor lookup | Confirm the selected process identity, request termination, observe exit |
+| Main workflow | Send the discovered MAC to Rails; a seeded OUI table answers first, then the public vendor service | Select one or several processes, confirm, terminate, observe each exit |
 | Persisted history | Resolved, unknown-vendor, and provider-failure outcomes | Confirmed termination events with original occurrence time |
 | Failure handling | Distinguish ARP miss, unknown vendor, API outage, and provider failure | Distinguish access denial, stale identity, unconfirmed exit, and audit failure |
-| Convenience | Detect and use the primary active IPv4 address | Configurable auto-refresh; keyboard search, selection, and refresh; durable audit retry without repeating termination |
+| Convenience | Detect and use the primary active IPv4 address; name a vendor for a MAC nobody recognizes | Inline and batch termination with select-all; configurable auto-refresh; keyboard search and refresh; durable audit retry without repeating termination |
 
 ## Architecture
 

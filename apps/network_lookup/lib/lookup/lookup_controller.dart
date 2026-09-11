@@ -24,7 +24,7 @@ final historyProvider = FutureProvider<List<LookupRecord>>(
   retry: (_, _) => null,
 );
 
-enum LookupPhase { idle, discovering, submitting, complete, failed }
+enum LookupPhase { idle, discovering, submitting, naming, complete, failed }
 
 class LookupState {
   const LookupState({
@@ -39,7 +39,15 @@ class LookupState {
   final LocalResolution? resolution;
   final LookupRecord? record;
   bool get busy =>
-      phase == LookupPhase.discovering || phase == LookupPhase.submitting;
+      phase == LookupPhase.discovering ||
+      phase == LookupPhase.submitting ||
+      phase == LookupPhase.naming;
+
+  /// A completed lookup whose MAC no source could name.
+  bool get canNameVendor =>
+      phase == LookupPhase.complete &&
+      resolution != null &&
+      record?.status == VendorStatus.unknown;
 }
 
 final lookupControllerProvider =
@@ -92,6 +100,38 @@ class LookupController extends Notifier<LookupState> {
         message: friendlyError(error),
       );
     }
+  }
+
+  /// Saves a user-defined vendor for the current MAC's OUI, then repeats the
+  /// lookup so the result and history reflect the new name.
+  Future<void> nameVendor(String name) async {
+    final current = state;
+    final trimmed = name.trim();
+    if (!current.canNameVendor || trimmed.isEmpty) return;
+    state = LookupState(
+      phase: LookupPhase.naming,
+      ip: current.ip,
+      resolution: current.resolution,
+      record: current.record,
+    );
+    try {
+      await ref
+          .read(lookupRepositoryProvider)
+          .createVendor(current.resolution!.mac, trimmed);
+    } catch (error) {
+      if (!ref.mounted) return;
+      state = LookupState(
+        phase: LookupPhase.complete,
+        ip: current.ip,
+        resolution: current.resolution,
+        record: current.record,
+        message: friendlyError(error),
+      );
+      return;
+    }
+    if (!ref.mounted) return;
+    state = const LookupState();
+    await lookup(current.ip!);
   }
 }
 

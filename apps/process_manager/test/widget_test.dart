@@ -54,7 +54,7 @@ void main() {
           snapshot: ManagerState(
             ready: true,
             processes: syntheticProcesses,
-            selected: syntheticProcesses.first,
+            selection: [syntheticProcesses.first],
             pending: [sampleEvent()],
             storageError: 'Process terminated, but its audit could not be saved to disk. Keep this app open and retry delivery.',
             auditError: auditError,
@@ -73,7 +73,7 @@ void main() {
         );
         expect(find.textContaining('Saved locally'), findsNothing);
         final terminate = tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Terminate process'),
+          find.widgetWithText(FilledButton, 'Terminate 1 process'),
         );
         expect(terminate.onPressed, isNull);
         expect(tester.takeException(), isNull);
@@ -111,13 +111,13 @@ void main() {
     expect(find.text('WindowServer'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('process-10532')));
     await tester.pump();
-    await tester.tap(find.text('Terminate process'));
+    await tester.tap(find.text('Terminate 1 process'));
     await tester.pumpAndSettle();
     expect(find.text('Terminate this process?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(processes.kills, 0);
-    await tester.tap(find.text('Terminate process'));
+    await tester.tap(find.text('Terminate 1 process'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm termination'));
     await tester.pumpAndSettle();
@@ -157,26 +157,47 @@ void main() {
       await tester.pumpAndSettle();
       expect(field.controller!.text, isEmpty);
       expect(find.text('WindowServer'), findsOneWidget);
-      // Leave the text field so arrows reach the page shortcuts.
-      field.focusNode!.unfocus();
+      // With an empty search, Escape clears the selection instead.
+      await tester.tap(find.byKey(const ValueKey('process-2408')));
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-      var scope = tester.element(find.byType(ProcessManagerPage));
-      expect(
-        ProviderScope.containerOf(scope).read(managerProvider).selected?.name,
-        'Activity Monitor',
-      );
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-      scope = tester.element(find.byType(ProcessManagerPage));
-      expect(
-        ProviderScope.containerOf(scope).read(managerProvider).selected?.name,
-        'design-preview',
-      );
+      expect(find.text('1 selected'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('inline terminate acts on one row without selection', (
+    tester,
+  ) async {
+    final processes = FakeProcesses();
+    await renderApp(tester, processes: processes);
+    await tester.tap(find.byKey(const ValueKey('terminate-10532')));
+    await tester.pumpAndSettle();
+    expect(find.text('Terminate this process?'), findsOneWidget);
+    await tester.tap(find.text('Confirm termination'));
+    await tester.pumpAndSettle();
+    expect(processes.kills, 1);
+    expect(processes.rows.any((p) => p.pid == 10532), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('select all then batch terminate confirms every row', (
+    tester,
+  ) async {
+    final processes = FakeProcesses();
+    await renderApp(tester, processes: processes);
+    await tester.tap(find.byKey(const Key('select-all')));
+    await tester.pumpAndSettle();
+    expect(find.text('8 selected'), findsOneWidget);
+    await tester.tap(find.text('Terminate 8 processes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Terminate 8 processes?'), findsOneWidget);
+    await tester.tap(find.text('Confirm termination'));
+    await tester.pumpAndSettle();
+    expect(processes.kills, 8);
+    expect(find.textContaining('8 of 8 processes terminated'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('OS error is distinct from empty list', (tester) async {
     await renderApp(
       tester,
@@ -195,7 +216,7 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('process-2408')));
       await tester.pump();
-      await tester.tap(find.text('Terminate process'));
+      await tester.tap(find.text('Terminate 1 process'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Confirm termination'));
       await tester.pumpAndSettle();

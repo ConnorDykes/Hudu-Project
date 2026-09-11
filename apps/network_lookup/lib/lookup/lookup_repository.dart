@@ -59,6 +59,9 @@ class LookupSubmission {
 abstract interface class LookupRepository {
   Future<LookupSubmission> submit(LocalResolution resolution);
   Future<List<LookupRecord>> history();
+
+  /// Registers [name] for the OUI of [mac] so future lookups resolve locally.
+  Future<void> createVendor(String mac, String name);
 }
 
 class RailsLookupRepository implements LookupRepository {
@@ -94,6 +97,11 @@ class RailsLookupRepository implements LookupRepository {
       );
     }
     return LookupRecord.fromJson(value);
+  }
+
+  @override
+  Future<void> createVendor(String mac, String name) async {
+    await client.post('/vendors', {'mac': mac, 'name': name});
   }
 
   @override

@@ -12,6 +12,8 @@ Base URL: `http://127.0.0.1:3000`. Use JSON request bodies and `Content-Type: ap
 | `GET` | `/lookups?mac=…` | Perform and persist a MAC vendor lookup (brief's form) | `200` resolved or unknown record |
 | `POST` | `/lookups` | Perform and persist a MAC vendor lookup (client's form) | `201` resolved or unknown record |
 | `GET` | `/lookups` | Read newest lookup history | `200` paginated records |
+| `POST` | `/vendors` | Name a vendor for a MAC's OUI so future lookups resolve locally | `201`; `409` if the OUI is taken |
+| `GET` | `/vendors` | List seeded and user-named vendors | `200` paginated records |
 | `POST` | `/process_events` | Persist a client-reported confirmed termination | `201` new; `200` identical duplicate |
 | `GET` | `/process_events` | Read termination audit history | `200` paginated records |
 
@@ -51,7 +53,17 @@ Example `201` response:
 | Provider rate limit | `503` | `status: "failed"`, `vendor: null` |
 | Invalid input | `422` | No record created |
 
-An unknown vendor is not an HTTP missing-resource error. Accepted provider failures are persisted; error responses may contain that record in `data`. Resolved and unknown provider answers are cached per MAC for 24 hours so repeated lookups of one device do not consume the provider's rate limit; each request still creates its own history record. A local ARP miss must not call this endpoint with a fabricated MAC. Repeating `POST /lookups` creates another accepted attempt; this endpoint does not share process-event idempotency.
+Resolution order is the local `vendors` table first (about thirty seeded IEEE OUI registrations for common manufacturers plus any user-named vendors), then the public provider. An unknown vendor is not an HTTP missing-resource error. Accepted provider failures are persisted; error responses may contain that record in `data`. Resolved and unknown provider answers are cached per MAC for 24 hours so repeated lookups of one device do not consume the provider's rate limit; each request still creates its own history record. A local ARP miss must not call this endpoint with a fabricated MAC. Repeating `POST /lookups` creates another accepted attempt; this endpoint does not share process-event idempotency.
+
+## Name a vendor
+
+```sh
+curl --fail-with-body http://127.0.0.1:3000/vendors \
+  -H 'Content-Type: application/json' \
+  -d '{"mac":"02:11:22:33:44:55","name":"Lab sensor"}'
+```
+
+`mac` (a full address) or `oui` (the first three octets) identifies the manufacturer prefix; `name` is required, at most 255 characters, and plain text. The vendor is stored by OUI with `source: "user"` and answers every later lookup for that prefix without a provider call. Reusing an OUI returns `409 vendor_exists` with the existing record in `data`. `GET /vendors` lists vendors sorted by name with the standard pagination envelope. The desktop client offers this after a lookup completes as `unknown`, then repeats the lookup so history shows the resolved name.
 
 ## Record a process event
 

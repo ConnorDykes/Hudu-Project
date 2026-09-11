@@ -64,28 +64,17 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     });
   }
 
-  /// Escape clears the filter and returns focus to the table so the arrow
-  /// keys move the selection immediately afterwards.
-  void _clearSearch() {
+  /// Escape clears the filter first, then the selection.
+  void _escape() {
+    final controller = ref.read(managerProvider.notifier);
     if (_search.text.isNotEmpty) {
       _search.clear();
-      ref.read(managerProvider.notifier).search('');
+      controller.search('');
       setState(() {});
+    } else {
+      controller.clearSelection();
     }
     _pageFocus.requestFocus();
-  }
-
-  /// Arrow keys move the selection through the visible, sorted rows.
-  void _moveSelection(int delta) {
-    if (_page != 0) return;
-    final state = ref.read(managerProvider);
-    final rows = state.visible;
-    if (rows.isEmpty) return;
-    final current = state.selected == null
-        ? -1
-        : rows.indexWhere(state.selected!.sameIdentity);
-    final next = (current + delta).clamp(0, rows.length - 1);
-    ref.read(managerProvider.notifier).select(rows[next]);
   }
 
   void _refreshCurrent() {
@@ -109,11 +98,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
             _refreshCurrent,
         const SingleActivator(LogicalKeyboardKey.keyR, control: true):
             _refreshCurrent,
-        const SingleActivator(LogicalKeyboardKey.escape): _clearSearch,
-        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-            _moveSelection(1),
-        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-            _moveSelection(-1),
+        const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Focus(
         focusNode: _pageFocus,
@@ -145,11 +130,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
               onPressed:
                   (_page == 0 ? refreshing || state.terminating : refreshing)
                   ? null
-                  : () => unawaited(
-                      _page == 0
-                          ? controller.refresh()
-                          : controller.refreshHistory(),
-                    ),
+                  : _refreshCurrent,
               icon: SpinningIcon(active: refreshing),
               label: const Text('Refresh'),
             ),
@@ -257,17 +238,8 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   Widget _processes(ManagerState state, ManagerController controller) {
     final c = context.colors;
     final rows = state.visible;
-    final selected = state.selected;
-    final canTerminate =
-        selected != null &&
-        !state.terminating &&
-        !state.refreshing &&
-        state.ready &&
-        state.storageError == null &&
-        selected.identity != null &&
-        selected.pid > 0 &&
-        selected.pid != pid &&
-        selected.status != 'Exited';
+    final selection = state.selection;
+    final batchTargets = selection.where(state.canTerminate).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -295,7 +267,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                           tooltip: 'Clear search',
                           iconSize: 14,
                           icon: const Icon(Icons.close_rounded),
-                          onPressed: _clearSearch,
+                          onPressed: _escape,
                         ),
                   suffixIconConstraints: const BoxConstraints(
                     minWidth: 34,
@@ -334,7 +306,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _tableHeading(state, controller),
+                _tableHeading(state, controller, rows),
                 const Divider(),
                 Expanded(
                   child: rows.isEmpty
@@ -360,15 +332,14 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                           itemExtent: 36,
                           itemBuilder: (context, index) => _ProcessRow(
                             process: rows[index],
-                            selected:
-                                state.selected?.sameIdentity(rows[index]) ??
-                                false,
-                            ownPid: pid,
-                            onTap: () => controller.select(
-                              state.selected?.sameIdentity(rows[index]) ?? false
-                                  ? null
-                                  : rows[index],
-                            ),
+                            selected: state.isSelected(rows[index]),
+                            selectable: rows[index].identity != null,
+                            canTerminate: state.canTerminate(rows[index]),
+                            onToggle: () {
+                              _pageFocus.requestFocus();
+                              controller.select(rows[index]);
+                            },
+                            onTerminate: () => _confirm([rows[index]]),
                           ),
                         ),
                 ),
@@ -387,35 +358,29 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                             alignment: Alignment.centerLeft,
                             children: [...previous, ?current],
                           ),
-                          child: selected == null
+                          child: selection.isEmpty
                               ? Text(
                                   key: const ValueKey('none'),
-                                  '${rows.length} shown · select a process to inspect or terminate',
+                                  '${rows.length} shown · select processes to act on several at once',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 )
                               : Row(
-                                  key: ValueKey(
-                                    '${selected.pid}-${selected.identity}',
-                                  ),
+                                  key: ValueKey('selected-${selection.length}'),
                                   children: [
-                                    Flexible(
-                                      child: Text(
-                                        selected.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
                                     Text(
-                                      'PID ${selected.pid}',
-                                      style: AppText.mono.copyWith(
-                                        color: c.textSecondary,
-                                      ),
+                                      '${selection.length} selected',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    TextButton(
+                                      onPressed: state.terminating
+                                          ? null
+                                          : controller.clearSelection,
+                                      child: const Text('Clear'),
                                     ),
                                   ],
                                 ),
@@ -423,9 +388,10 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                       ),
                       const SizedBox(width: 12),
                       FilledButton.icon(
-                        onPressed: canTerminate
-                            ? () => _confirm(selected)
-                            : null,
+                        key: const Key('terminate-selected'),
+                        onPressed: batchTargets.isEmpty
+                            ? null
+                            : () => _confirm(batchTargets),
                         style: FilledButton.styleFrom(
                           backgroundColor: c.danger,
                           foregroundColor: Colors.white,
@@ -438,7 +404,9 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                         label: Text(
                           state.terminating
                               ? 'Confirming exit…'
-                              : 'Terminate process',
+                              : selection.length == 1
+                              ? 'Terminate 1 process'
+                              : 'Terminate ${selection.length} processes',
                         ),
                       ),
                     ],
@@ -452,36 +420,52 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     );
   }
 
-  Widget _tableHeading(ManagerState state, ManagerController controller) =>
-      Container(
-        height: 34,
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-        child: Row(
-          children: [
-            const SizedBox(width: 2),
-            Expanded(
-              child: _SortHeader(
-                label: 'Name',
-                active: !state.sortPid,
-                ascending: state.ascending,
-                onTap: () => controller.sort(false),
-              ),
+  Widget _tableHeading(
+    ManagerState state,
+    ManagerController controller,
+    List<LocalProcess> rows,
+  ) {
+    final eligible = rows.where((p) => p.identity != null).toList();
+    final allSelected = eligible.isNotEmpty && eligible.every(state.isSelected);
+    final someSelected = eligible.any(state.isSelected);
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.fromLTRB(8, 0, 14, 0),
+      child: Row(
+        children: [
+          _RowCheckbox(
+            key: const Key('select-all'),
+            value: allSelected,
+            tristate: someSelected && !allSelected,
+            enabled: eligible.isNotEmpty && !state.terminating,
+            tooltip: allSelected ? 'Clear selection' : 'Select all shown',
+            onChanged: () => controller.selectAll(rows),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _SortHeader(
+              label: 'Name',
+              active: !state.sortPid,
+              ascending: state.ascending,
+              onTap: () => controller.sort(false),
             ),
-            SizedBox(
-              width: 100,
-              child: _SortHeader(
-                label: 'PID',
-                alignEnd: true,
-                active: state.sortPid,
-                ascending: state.ascending,
-                onTap: () => controller.sort(true),
-              ),
+          ),
+          SizedBox(
+            width: 100,
+            child: _SortHeader(
+              label: 'PID',
+              alignEnd: true,
+              active: state.sortPid,
+              ascending: state.ascending,
+              onTap: () => controller.sort(true),
             ),
-            const SizedBox(width: 24),
-            const SizedBox(width: 110, child: TableLabel('Status')),
-          ],
-        ),
-      );
+          ),
+          const SizedBox(width: 24),
+          const SizedBox(width: 104),
+        ],
+      ),
+    );
+  }
 
   Widget _history(ManagerState state) {
     final c = context.colors;
@@ -582,51 +566,78 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     );
   }
 
-  Future<void> _confirm(LocalProcess process) async {
+  /// One confirmation for one or several processes; lists what will be ended.
+  Future<void> _confirm(List<LocalProcess> processes) async {
     final c = context.colors;
+    final many = processes.length > 1;
+    const preview = 8;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Terminate this process?'),
+        title: Text(
+          many
+              ? 'Terminate ${processes.length} processes?'
+              : 'Terminate this process?',
+        ),
         content: SizedBox(
-          width: 420,
+          width: 440,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
                 decoration: BoxDecoration(
                   color: c.background,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: c.hairline),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: Text(
-                        process.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
+                    for (final process in processes.take(preview))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                process.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'PID ${process.pid}',
+                              style: AppText.mono.copyWith(
+                                color: c.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'PID ${process.pid}',
-                      style: AppText.mono.copyWith(color: c.textSecondary),
-                    ),
+                    if (processes.length > preview)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'and ${processes.length - preview} more',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
               Text(
                 Platform.isWindows
-                    ? 'Unsaved work in this process may be lost. Windows ends it immediately.'
-                    : 'Unsaved work in this process may be lost. macOS sends SIGTERM and waits up to 4 seconds for it to exit.',
+                    ? 'Unsaved work in ${many ? 'these processes' : 'this process'} may be lost. Windows ends ${many ? 'them' : 'it'} immediately.'
+                    : 'Unsaved work in ${many ? 'these processes' : 'this process'} may be lost. macOS sends SIGTERM and waits up to 4 seconds for ${many ? 'each' : 'it'} to exit.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -650,7 +661,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
       ),
     );
     if (confirmed == true && mounted) {
-      await ref.read(managerProvider.notifier).terminate(process);
+      await ref.read(managerProvider.notifier).terminateAll(processes);
     }
   }
 }
@@ -703,6 +714,39 @@ class _SortHeader extends StatelessWidget {
   }
 }
 
+/// Compact checkbox that matches the table's 36px rows.
+class _RowCheckbox extends StatelessWidget {
+  const _RowCheckbox({
+    super.key,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+    this.tristate = false,
+    this.tooltip,
+  });
+  final bool value, enabled, tristate;
+  final String? tooltip;
+  final VoidCallback onChanged;
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final box = SizedBox(
+      width: 28,
+      height: 28,
+      child: Checkbox(
+        value: tristate ? null : value,
+        tristate: tristate,
+        onChanged: enabled ? (_) => onChanged() : null,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        side: BorderSide(color: enabled ? c.textTertiary : c.hairline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+    );
+    return tooltip == null ? box : Tooltip(message: tooltip!, child: box);
+  }
+}
+
 /// Row hover highlight for read-only tables.
 class _HoverRow extends StatefulWidget {
   const _HoverRow({required this.child});
@@ -735,34 +779,34 @@ class _ProcessRow extends StatelessWidget {
   const _ProcessRow({
     required this.process,
     required this.selected,
-    required this.ownPid,
-    required this.onTap,
+    required this.selectable,
+    required this.canTerminate,
+    required this.onToggle,
+    required this.onTerminate,
   });
   final LocalProcess process;
-  final bool selected;
-  final int ownPid;
-  final VoidCallback onTap;
+  final bool selected, selectable, canTerminate;
+  final VoidCallback onToggle, onTerminate;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final isSelf = process.pid == ownPid;
-    final statusColor = isSelf
-        ? c.accent
+    final isSelf = process.pid == pid;
+    final note = isSelf
+        ? 'This app'
         : switch (process.status) {
-            'Running' => c.success,
-            'Protected' => c.warning,
-            _ => c.textTertiary,
+            'Protected' => 'Protected',
+            'Exited' => 'Exited',
+            _ => null,
           };
     return Semantics(
       selected: selected,
-      button: true,
       label: '${process.name}, PID ${process.pid}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey('process-${process.pid}'),
-          onTap: onTap,
+          onTap: selectable ? onToggle : null,
           hoverColor: c.hover,
           child: AnimatedContainer(
             duration: AppMotion.fast,
@@ -776,21 +820,40 @@ class _ProcessRow extends StatelessWidget {
                 bottom: BorderSide(color: c.hairline),
               ),
             ),
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+            padding: const EdgeInsets.fromLTRB(6, 0, 8, 0),
             child: Row(
               children: [
+                _RowCheckbox(
+                  value: selected,
+                  enabled: selectable,
+                  onChanged: onToggle,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    process.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: process.status == 'Exited'
-                          ? c.textTertiary
-                          : c.text,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          process.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: process.status == 'Exited'
+                                ? c.textTertiary
+                                : c.text,
+                          ),
+                        ),
+                      ),
+                      if (note != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          note,
+                          style: TextStyle(fontSize: 11, color: c.textTertiary),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 SizedBox(
@@ -803,10 +866,28 @@ class _ProcessRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 24),
                 SizedBox(
-                  width: 110,
-                  child: StatusPill(
-                    isSelf ? 'This app' : process.status,
-                    color: statusColor,
+                  width: 104,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton(
+                      key: ValueKey('terminate-${process.pid}'),
+                      onPressed: canTerminate ? onTerminate : null,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 26),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        foregroundColor: c.danger,
+                        side: BorderSide(
+                          color: canTerminate
+                              ? c.danger.withValues(alpha: .45)
+                              : c.hairline,
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: const Text('Terminate'),
+                    ),
                   ),
                 ),
               ],

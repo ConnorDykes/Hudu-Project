@@ -11,7 +11,9 @@ bin/rails server -b 127.0.0.1 -p 3000
 ```
 
 No API key, master key, or production secret is required in development. History
-lives in `storage/development.sqlite3`. No records are seeded by default. This is
+lives in `storage/development.sqlite3`. `db:prepare` seeds about thirty manufacturer
+OUIs into `vendors` on a fresh database; run `bin/rails db:seed` to add them to an
+existing one (user-named vendors are never overwritten). This is
 an unauthenticated local API; keep the host binding on localhost.
 
 ```sh
