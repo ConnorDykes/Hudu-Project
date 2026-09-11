@@ -570,7 +570,6 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   Future<void> _confirm(List<LocalProcess> processes) async {
     final c = context.colors;
     final many = processes.length > 1;
-    const preview = 8;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -591,46 +590,45 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: c.hairline),
                 ),
-                child: Column(
-                  children: [
-                    for (final process in processes.take(preview))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                process.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+                  ),
+                  child: SingleChildScrollView(
+                    key: const ValueKey('termination-targets'),
+                    child: Column(
+                      children: [
+                        for (final process in processes)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
                             ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'PID ${process.pid}',
-                              style: AppText.mono.copyWith(
-                                color: c.textSecondary,
-                              ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    process.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'PID ${process.pid}',
+                                  style: AppText.mono.copyWith(
+                                    color: c.textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    if (processes.length > preview)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'and ${processes.length - preview} more',
-                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                        ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 14),

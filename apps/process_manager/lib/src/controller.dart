@@ -308,10 +308,18 @@ class ManagerController extends Notifier<ManagerState> {
     state = state.copy(terminating: true, notice: 'Checking process identity…');
     final outcomes = <LocalProcess, ExitOutcome>{};
     Object? failure;
+    var skipped = 0;
     try {
       // Fail before an irreversible action when storage is already unavailable.
       await _outbox.prepare();
-      for (final process in processes) {
+      for (final (index, process) in processes.indexed) {
+        if (!ref.mounted) return;
+        // A prior exit may have exposed a disk failure during this batch.
+        // Preserve its in-memory audit and leave the remaining processes alone.
+        if (state.storageError != null) {
+          skipped = processes.length - index;
+          break;
+        }
         try {
           outcomes[process] = await _terminateOne(process);
         } catch (error) {
@@ -325,7 +333,11 @@ class ManagerController extends Notifier<ManagerState> {
       if (ref.mounted) {
         state = state.copy(
           terminating: false,
-          notice: _summarize(outcomes, failure),
+          notice: [
+            _summarize(outcomes, failure),
+            if (skipped > 0)
+              'Batch stopped because audit storage failed. $skipped ${skipped == 1 ? 'process was' : 'processes were'} not attempted; confirm again after recovery.',
+          ].join(' '),
         );
       }
     }

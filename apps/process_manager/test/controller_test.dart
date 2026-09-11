@@ -231,6 +231,41 @@ void main() {
     expect(processes.kills, 2, reason: 'adapter decides; both are attempted');
     expect(container.read(managerProvider).notice, isNotEmpty);
   });
+  test(
+    'disk failure stops the batch and retry never terminates skipped targets',
+    () async {
+      await controller.initialize();
+      final targets = processes.rows.take(3).toList();
+      for (final process in targets) {
+        controller.select(process);
+      }
+      outbox.putFailure = Exception('disk full');
+
+      await controller.terminateAll(targets);
+
+      final state = container.read(managerProvider);
+      expect(processes.kills, 1);
+      expect(state.pending.single.pid, targets.first.pid);
+      expect(outbox.events, isEmpty);
+      expect(state.storageError, contains('could not be saved'));
+      expect(state.notice, contains('2 processes were not attempted'));
+      expect(
+        state.selection.map((p) => p.pid),
+        targets.skip(1).map((p) => p.pid),
+      );
+      expect(processes.rows, containsAll(targets.skip(1)));
+      final original = state.pending.single.toJson();
+
+      outbox.putFailure = null;
+      await controller.retryAudits();
+
+      expect(processes.kills, 1);
+      expect(audit.records.single.toJson(), original);
+      expect(container.read(managerProvider).pending, isEmpty);
+      expect(container.read(managerProvider).storageError, isNull);
+      expect(processes.rows, containsAll(targets.skip(1)));
+    },
+  );
   test('refresh is single flight and keeps stale rows on error', () async {
     await controller.initialize();
     processes.blocked = Completer();

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:process_manager/process_manager_app.dart';
 import 'package:process_manager/src/controller.dart';
+import 'package:process_manager/src/models.dart';
 
 import 'support/fakes.dart';
 import 'support/fonts.dart';
@@ -206,6 +207,51 @@ void main() {
     expect(find.text('Process list unavailable'), findsOneWidget);
     expect(find.text('No processes returned'), findsNothing);
   });
+  testWidgets(
+    'large batch lists every target with scrolling and supports cancel',
+    (tester) async {
+      final processes = FakeProcesses()
+        ..rows = List.generate(
+          20,
+          (index) => LocalProcess(
+            pid: 20000 + index,
+            name: 'worker-${index.toString().padLeft(2, '0')}',
+            identity: 'batch-$index',
+          ),
+        );
+      await renderApp(tester, processes: processes, size: const Size(960, 680));
+      await tester.tap(find.byKey(const Key('select-all')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Terminate 20 processes'));
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(AlertDialog);
+      final lastTarget = find.descendant(
+        of: dialog,
+        matching: find.text('PID 20019'),
+      );
+      expect(lastTarget, findsOneWidget);
+      expect(lastTarget.hitTestable(), findsNothing);
+      expect(find.textContaining('and 12 more'), findsNothing);
+      await tester.drag(
+        find.byKey(const ValueKey('termination-targets')),
+        const Offset(0, -1200),
+      );
+      await tester.pumpAndSettle();
+      expect(lastTarget.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(processes.kills, 0);
+
+      await tester.tap(find.text('Terminate 20 processes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm termination'));
+      await tester.pumpAndSettle();
+      expect(processes.kills, 20);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'offline audit shows confirmed exit and pending delivery independently',
     (tester) async {
