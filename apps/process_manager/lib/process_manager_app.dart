@@ -881,10 +881,11 @@ class _ProcessRow extends StatelessWidget {
                               ? c.danger.withValues(alpha: .45)
                               : c.hairline,
                         ),
-                        textStyle: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        textStyle: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                       child: const Text('Terminate'),
                     ),
