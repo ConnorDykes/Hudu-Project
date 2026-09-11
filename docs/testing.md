@@ -120,6 +120,6 @@ UPDATE_GOLDENS=true flutter test --update-goldens test/screenshots_test.dart
 UPDATE_GOLDENS=true flutter test test/screenshots_test.dart
 ```
 
-Outputs are `test/goldens/network-lookup.png` and `test/goldens/process-manager.png`, copied into `docs/assets/` after visual inspection. Golden tests are opt-in to avoid cross-platform rasterization differences.
+Outputs are `test/goldens/network-lookup.png` and `network-lookup-name-vendor.png` for Network Lookup, and `process-manager.png`, `process-manager-confirm.png`, and `process-manager-history.png` for Process Manager, copied into `docs/assets/` after visual inspection. Golden tests are opt-in to avoid cross-platform rasterization differences.
 
 Interactive app inspection is recorded separately in [verification results](verification-results.md). Native test success or a compiled binary is not described as manual UI verification.

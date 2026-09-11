@@ -12,10 +12,14 @@ Both applications and the API are implemented, with native macOS and Windows CI 
 
 | Network Lookup | Process Manager |
 | --- | --- |
-| ![Network Lookup showing a resolved device and recent vendor history](docs/assets/network-lookup.png) | ![Process Manager showing a sortable process table and termination controls](docs/assets/process-manager.png) |
-| IPv4 → local MAC → vendor, with persisted history. | Local process inspection, confirmed termination, and audit history. |
+| ![Network Lookup showing a resolved device and recent vendor history](docs/assets/network-lookup.png) | ![Process Manager showing a sortable process table with two rows selected and inline terminate buttons](docs/assets/process-manager.png) |
+| IPv4 → local MAC → vendor, with persisted history. | Sortable process table with checkbox selection and inline termination. |
+| ![Network Lookup naming a vendor for an unrecognized MAC](docs/assets/network-lookup-name-vendor.png) | ![Process Manager confirming termination of eight selected processes](docs/assets/process-manager-confirm.png) |
+| Naming a vendor for a MAC that neither the local table nor the public service knows. | One confirmation lists every process in a batch before anything is terminated. |
+| | ![Process Manager audit history listing confirmed terminations from the API](docs/assets/process-manager-history.png) |
+| | Audit history read back from the Rails API, newest exit first. |
 
-*Actual Flutter UI rendered with synthetic sample data. [Preview provenance](docs/testing.md#screenshot-provenance).*
+*Actual Flutter UI rendered in the dark theme with synthetic sample data; both apps also follow a light system theme. [Preview provenance](docs/testing.md#screenshot-provenance).*
 
 ## Two options, independently runnable
 
