@@ -1,19 +1,25 @@
+# Bounded offset pagination read from request parameters.
+# Values must be plain decimal strings; arrays, nested hashes, signs, and decimals are rejected.
 class Pagination
   class Invalid < StandardError; end
 
+  DEFAULT_LIMIT = 30
+  MAX_LIMIT = 100
+  MAX_OFFSET = 9_223_372_036_854_775_807
+
   attr_reader :limit, :offset
 
-  def initialize(values, raw: values)
-    @limit = integer(values, raw, "limit", 30)
-    @offset = integer(values, raw, "offset", 0)
-    raise Invalid unless (1..100).cover?(@limit) && (0..9_223_372_036_854_775_807).cover?(@offset)
+  def initialize(params)
+    @limit = integer(params, :limit, DEFAULT_LIMIT)
+    @offset = integer(params, :offset, 0)
+    raise Invalid unless (1..MAX_LIMIT).cover?(@limit) && @offset <= MAX_OFFSET
   end
 
   private
 
-  def integer(values, raw, key, default)
-    return default unless raw.key?(key)
-    value = values[key]
+  def integer(params, key, default)
+    return default unless params.key?(key)
+    value = params[key]
     raise Invalid unless value.is_a?(String) && value.match?(/\A\d{1,19}\z/)
     value.to_i
   end

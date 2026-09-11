@@ -18,7 +18,7 @@ Unknown vendor: `201`, same record with `vendor:null,status:"unknown"` (a comple
 
 `GET /process_events?limit=30&offset=0`: same pagination envelope; order occurred_at desc then id desc.
 
-`GET /health`: `200 {"status":"ok"}` with DB readiness check. Unknown API route returns JSON 404; malformed JSON returns JSON 400.
+`GET /health`: `200 {"status":"ok"}` with DB readiness check. Unknown API route returns JSON 404; malformed JSON returns JSON 400; an unexpected server failure returns JSON 500 with code `internal_error`.
 
 ## Client conventions
 

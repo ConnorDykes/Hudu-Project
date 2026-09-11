@@ -21,6 +21,16 @@ class ApiErrorsTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "SECRET"
   end
 
+  test "unexpected failures return the JSON error envelope without internal details" do
+    Lookup.stub(:order, ->(*) { raise "SECRET internal detail" }) do
+      get "/lookups"
+    end
+    assert_response :internal_server_error
+    assert_equal "application/json", response.media_type
+    assert_equal "internal_error", response.parsed_body.dig("error", "code")
+    assert_not_includes response.body, "SECRET"
+  end
+
   test "unknown routes and unsupported methods return JSON 404" do
     [ "/", "/missing", "/lookups/1", "/up", "/missing.html" ].each do |path|
       get path

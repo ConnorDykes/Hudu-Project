@@ -106,6 +106,14 @@ void main() {
       throwsA(isA<NetworkFailure>()),
     );
     expect(parseMacArp(''), isEmpty);
+    expect(
+      parseMacArp(
+        'arp: warning about one interface\n'
+        '? (192.168.1.1) at 02:11:22:33:44:55 on en0 ifscope [ethernet]\n',
+      ).single.mac,
+      '02:11:22:33:44:55',
+      reason: 'One unrecognized line must not fail the whole lookup',
+    );
   });
   test('macOS interface metadata excludes loopback and inactive but keeps VPN without MAC', () {
     final interfaces = parseMacInterfaces(macInterfaces, primaryName: 'en0');
@@ -246,32 +254,41 @@ void main() {
       NativeNetworkAdapter.neighborScript,
     ]);
   });
-  test('native command runner bounds child runtime and rejects stderr / exit errors', () async {
-    const runner = NativeCommandRunner(timeout: Duration(milliseconds: 100));
-    final clock = Stopwatch()..start();
-    await expectLater(
-      runner.run('/bin/sleep', ['5']),
-      throwsA(
-        isA<NetworkFailure>().having(
-          (e) => e.message,
-          'timeout',
-          contains('timed out'),
+  test(
+    'native command runner bounds child runtime and rejects exit errors',
+    () async {
+      const runner = NativeCommandRunner(timeout: Duration(milliseconds: 100));
+      final clock = Stopwatch()..start();
+      await expectLater(
+        runner.run('/bin/sleep', ['5']),
+        throwsA(
+          isA<NetworkFailure>().having(
+            (e) => e.message,
+            'timeout',
+            contains('timed out'),
+          ),
         ),
-      ),
-    );
-    expect(clock.elapsed, lessThan(const Duration(seconds: 3)));
-    await expectLater(
-      runner.run('/usr/bin/false', []),
-      throwsA(isA<NetworkFailure>()),
-    );
-    await expectLater(
-      runner.run('/usr/bin/ls', ['/path-that-does-not-exist-hudu-test']),
-      throwsA(isA<NetworkFailure>()),
-    );
-    await expectLater(
-      const NativeCommandRunner(maxOutputBytes: 2)
-          .run('/bin/echo', ['bounded']),
-      throwsA(isA<NetworkFailure>()),
-    );
-  }, skip: Platform.isWindows);
+      );
+      expect(clock.elapsed, lessThan(const Duration(seconds: 3)));
+      await expectLater(
+        runner.run('/usr/bin/false', []),
+        throwsA(isA<NetworkFailure>()),
+      );
+      await expectLater(
+        runner.run('/usr/bin/ls', ['/path-that-does-not-exist-hudu-test']),
+        throwsA(isA<NetworkFailure>()),
+      );
+      await expectLater(
+        const NativeCommandRunner(maxOutputBytes: 2)
+            .run('/bin/echo', ['bounded']),
+        throwsA(isA<NetworkFailure>()),
+      );
+      // A warning on stderr with a zero exit code is still a successful read.
+      expect(
+        await runner.run('/bin/sh', ['-c', 'echo warning >&2; echo ok']),
+        'ok\n',
+      );
+    },
+    skip: Platform.isWindows,
+  );
 }

@@ -165,12 +165,14 @@ class NativeCommandRunner implements CommandRunner {
           return utf8.decode(bytes, allowMalformed: false);
         }
 
+        // stderr is drained so the child cannot block on a full pipe, but only
+        // the exit code decides success: utilities may warn and still succeed.
         final results = await Future.wait<Object>([
           child.exitCode,
           read(child.stdout),
           read(child.stderr),
         ], eagerError: true);
-        if (results[0] != 0 || (results[2] as String).trim().isNotEmpty) {
+        if (results[0] != 0) {
           throw const NetworkFailure(
             'The operating system could not read network information. '
             'Check network permissions and native command availability.',
@@ -211,20 +213,24 @@ class NativeCommandRunner implements CommandRunner {
   }
 }
 
+/// Lines the parser does not recognize are skipped so one unusual entry cannot
+/// fail a whole lookup; output with no recognizable entry at all is an error.
 List<NeighborEntry> parseMacArp(String output) {
   final entries = <NeighborEntry>[];
   final pattern = RegExp(r'^\S+\s+\(([^)]+)\)\s+at\s+(\S+)\s+on\s+(\S+)');
+  var recognized = 0;
   for (final line in const LineSplitter().convert(output)) {
-    if (line.trim().isEmpty) continue;
     final match = pattern.firstMatch(line.trim());
-    if (match == null) {
-      throw const NetworkFailure('The ARP table format was not recognized.');
-    }
+    if (match == null) continue;
+    recognized++;
     final ip = canonicalIpv4(match[1]!);
     final mac = normalizeMac(match[2]);
     if (ip != null && mac != null) {
       entries.add(NeighborEntry(ip, mac, match[3]!));
     }
+  }
+  if (recognized == 0 && output.trim().isNotEmpty) {
+    throw const NetworkFailure('The ARP table format was not recognized.');
   }
   return entries;
 }

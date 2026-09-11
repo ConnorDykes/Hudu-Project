@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -11,8 +13,15 @@ class ApiException implements Exception {
   });
   final String message;
   final String code;
+
+  /// HTTP status of the failed response; null when no response arrived
+  /// (unreachable, timeout, invalid URL), which callers treat as transient.
   final int? statusCode;
   final Map<String, dynamic>? data;
+
+  /// True when retrying the same request later could plausibly succeed.
+  bool get isTransient => statusCode == null || statusCode! >= 500;
+
   @override
   String toString() => message;
 }
@@ -45,61 +54,86 @@ class ApiClient {
     Map<String, String>? query,
     Map<String, dynamic>? body,
   }) async {
+    final request = http.Request(method, _uri(path, query))
+      ..headers['Accept'] = 'application/json';
+    if (body != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode(body);
+    }
+    final http.Response response;
     try {
-      final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
-      final uri = Uri.parse(
-        '$base/$path'.replaceFirst('$base//', '$base/'),
-      ).replace(queryParameters: query);
-      if (!['http', 'https'].contains(uri.scheme) || uri.host.isEmpty) {
-        throw const ApiException(
-          'The API address is invalid. Check API_BASE_URL.',
-          code: 'invalid_url',
-        );
-      }
-      final request = http.Request(method, uri)
-        ..headers['Accept'] = 'application/json';
-      if (body != null) {
-        request.headers['Content-Type'] = 'application/json';
-        request.body = jsonEncode(body);
-      }
-      final response = await (() async => http.Response.fromStream(
-        await _client.send(request),
-      ))().timeout(timeout);
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) throw const FormatException();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        final error = decoded['error'];
-        throw ApiException(
-          error is Map && error['message'] is String
-              ? error['message'] as String
-              : 'The API could not complete this request.',
-          code: error is Map && error['code'] is String
-              ? error['code'] as String
-              : 'api_error',
-          statusCode: response.statusCode,
-          data: decoded['data'] is Map<String, dynamic>
-              ? decoded['data'] as Map<String, dynamic>
-              : null,
-        );
-      }
-      return decoded;
+      response = await _send(request).timeout(timeout);
     } on TimeoutException {
       throw const ApiException(
         'The API took too long to respond. Check the service and try again.',
         code: 'timeout',
       );
     } on http.ClientException {
-      throw const ApiException(
-        'Cannot reach the Rails API. Start the service and check API_BASE_URL.',
-        code: 'unreachable',
-      );
-    } on FormatException {
-      throw const ApiException(
-        'The API returned an unexpected response.',
-        code: 'invalid_response',
+      throw _unreachable;
+    } on IOException {
+      // Socket and TLS failures that package:http does not wrap.
+      throw _unreachable;
+    }
+    final decoded = _decode(response.body);
+    final status = response.statusCode;
+    if (status < 200 || status >= 300) {
+      final error = decoded?['error'];
+      throw ApiException(
+        error is Map && error['message'] is String
+            ? error['message'] as String
+            : 'The API request failed (HTTP $status).',
+        code: error is Map && error['code'] is String
+            ? error['code'] as String
+            : 'api_error',
+        statusCode: status,
+        data: decoded?['data'] is Map<String, dynamic>
+            ? decoded!['data'] as Map<String, dynamic>
+            : null,
       );
     }
+    if (decoded == null) {
+      throw ApiException(
+        'The API returned an unexpected response.',
+        code: 'invalid_response',
+        statusCode: status,
+      );
+    }
+    return decoded;
   }
+
+  Future<http.Response> _send(http.Request request) async =>
+      http.Response.fromStream(await _client.send(request));
+
+  Uri _uri(String path, Map<String, String>? query) {
+    final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final relative = path.replaceFirst(RegExp(r'^/+'), '');
+    final uri = Uri.tryParse('$base/$relative');
+    if (uri == null ||
+        !const {'http', 'https'}.contains(uri.scheme) ||
+        uri.host.isEmpty) {
+      throw const ApiException(
+        'The API address is invalid. Check API_BASE_URL.',
+        code: 'invalid_url',
+      );
+    }
+    return query == null ? uri : uri.replace(queryParameters: query);
+  }
+
+  /// A JSON object body, or null when the body is not one.
+  static Map<String, dynamic>? _decode(String body) {
+    if (body.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static const _unreachable = ApiException(
+    'Cannot reach the Rails API. Start the service and check API_BASE_URL.',
+    code: 'unreachable',
+  );
 
   void close() => _client.close();
 }

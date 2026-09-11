@@ -36,6 +36,15 @@ The **85-test Flutter total** is 7 shared + 41 network + 37 process tests on mac
 4. **Concurrent storage failure:** an older successful upload cannot clear a newer memory-only event's warning. Controller and widget regressions preserve the warning and prevent a false “Saved locally” label.
 5. **Windows discovery timeout:** CI proved that an eight-second command deadline was exceeded; cold PowerShell/CIM initialization is the likely explanation, not a measured root-cause guarantee. Windows now has one shared 30-second discovery deadline including startup. No automatic retries or native-test skips were added. A read-only reviewer caught unconsumed pipes on the late-start cleanup path; both pipes are now cancelled, with buffered-output and refused-termination regressions. Targeted re-review found no remaining actionable issue.
 
+## Hardening pass (September 10, 2026, after 3f43162)
+
+A second review pass focused on production readiness rather than features. Changes and the evidence gathered for them:
+
+- **Rails:** removed `Timeout.timeout` around the vendor request (unsafe inside threaded Puma; Net::HTTP phase timeouts already bound the call); resolved and unknown vendor answers are now cached per MAC for 24 hours and failures are logged by error class; a `rescue_from StandardError` returns the same JSON envelope with `500 internal_error` and reports through `Rails.error`; pagination parsing was simplified; production `force_ssl`/`assume_ssl` are controlled by `FORCE_SSL` so a loopback deployment without TLS is not redirected; the silenced health path is `/health`; MAC normalization no longer adds duplicate validation errors.
+- **Flutter:** `ApiClient` keeps the HTTP status when an error body is not JSON, treats TLS/socket errors as unreachable, and exposes `isTransient`; the audit retry loop skips a rejected event (4xx) instead of blocking the rest of the queue while still stopping at the first transport failure; audit records from the API are validated instead of cast; native command success is decided by exit code alone, and one unrecognized `arp`/`ps` line no longer fails a whole read.
+- **Evidence:** Rails **41 tests / 447 assertions**, RuboCop, Brakeman, and Zeitwerk clean. Flutter **9 shared + 41 network + 39 process = 89 tests**, analysis clean. Both opt-in real-Rails smoke suites pass against a local server. A live `POST /lookups` returned the Apple vendor in 343 ms and the cached repeat in 7 ms; 400/404/422 envelopes were checked by hand. Both apps were launched on macOS against the running API.
+- **Not changed:** the Docker image still runs as root because Docker was unavailable on the review host; adding a non-root user is the next container hardening step. SQLite remains the store; `DATABASE_URL` switches adapters without code changes once the matching gem is added.
+
 ## Remaining boundaries
 
 - Interactive native GUI inspection was blocked by the locked Mac. No lock bypass was attempted. Neither Mac interactive review nor Windows manual GUI testing is claimed.

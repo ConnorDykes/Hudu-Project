@@ -331,12 +331,22 @@ class ManagerController extends Notifier<ManagerState> {
   Future<void> retryAudits() async {
     if (!state.ready || state.delivering || state.pending.isEmpty) return;
     state = state.copy(delivering: true, clearAuditError: true);
+    Object? firstError;
     try {
       for (final event in List<AuditEvent>.of(state.pending)) {
-        // Idempotent outbox/API operations only. Never call the OS adapter here.
-        await _outbox.put(event);
-        await _audit.send(event);
-        await _outbox.remove(event.eventId);
+        try {
+          // Idempotent outbox/API operations only. Never call the OS adapter here.
+          await _outbox.put(event);
+          await _audit.send(event);
+          await _outbox.remove(event.eventId);
+        } catch (error) {
+          firstError ??= error;
+          if (!ref.mounted) return;
+          // A rejected event (for example 409 or 422) must not block the rest of
+          // the queue; a transport or server failure would fail them all, so stop.
+          if (error is ApiException && !error.isTransient) continue;
+          break;
+        }
         if (!ref.mounted) return;
         state = state.copy(
           pending: state.pending
@@ -344,15 +354,16 @@ class ManagerController extends Notifier<ManagerState> {
               .toList(),
         );
       }
-      // A newer termination can append a memory-only event while this retry's
-      // snapshot is in flight. Keep the storage warning until the live queue
-      // is fully delivered, including any events added during this retry.
-      if (ref.mounted && state.pending.isEmpty) {
+      if (!ref.mounted) return;
+      if (firstError != null) {
+        state = state.copy(
+          auditError: 'Audit pending. ${_message(firstError)}',
+        );
+      } else if (state.pending.isEmpty) {
+        // A newer termination can append a memory-only event while this retry's
+        // snapshot is in flight. Keep the storage warning until the live queue
+        // is fully delivered, including any events added during this retry.
         state = state.copy(clearStorageError: true);
-      }
-    } catch (error) {
-      if (ref.mounted) {
-        state = state.copy(auditError: 'Audit pending. ${_message(error)}');
       }
     } finally {
       if (ref.mounted) state = state.copy(delivering: false);

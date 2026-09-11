@@ -20,17 +20,15 @@ class ApiAuditRepository implements AuditRepository {
       '/process_events',
       query: {'limit': '30', 'offset': '0'},
     );
-    return (response['data'] as List)
-        .map((row) => AuditEvent.fromJson(row as Map<String, dynamic>))
-        .toList();
+    final rows = response['data'];
+    if (rows is! List) throw _invalidResponse;
+    return rows.map(_event).toList();
   }
 
   @override
   Future<void> send(AuditEvent event) async {
     final response = await client.post('/process_events', event.toJson());
-    final accepted = AuditEvent.fromJson(
-      response['data'] as Map<String, dynamic>,
-    );
+    final accepted = _event(response['data']);
     if (accepted.eventId != event.eventId ||
         accepted.pid != event.pid ||
         accepted.processName != event.processName ||
@@ -39,6 +37,20 @@ class ApiAuditRepository implements AuditRepository {
       throw const ProcessFailure(
         'The audit response did not match the queued event. It remains pending.',
       );
+    }
+  }
+
+  static const _invalidResponse = ApiException(
+    'The API returned an invalid audit record.',
+    code: 'invalid_response',
+  );
+
+  static AuditEvent _event(Object? row) {
+    if (row is! Map<String, dynamic>) throw _invalidResponse;
+    try {
+      return AuditEvent.fromJson(row);
+    } on FormatException {
+      throw _invalidResponse;
     }
   }
 }

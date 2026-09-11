@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:desktop_core/desktop_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -50,6 +52,53 @@ void main() {
       throwsA(isA<ApiException>().having((e) => e.code, 'code', 'unreachable')),
     );
     client.close();
+  });
+
+  test('keeps the HTTP status when an error response is not JSON', () async {
+    final client = ApiClient(
+      client: MockClient(
+        (_) async => http.Response('<html>Bad Gateway</html>', 502),
+      ),
+    );
+    await expectLater(
+      client.get('/lookups'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'status', 502)
+            .having((e) => e.code, 'code', 'api_error')
+            .having((e) => e.isTransient, 'transient', isTrue)
+            .having((e) => e.message, 'message', contains('502')),
+      ),
+    );
+    client.close();
+  });
+
+  test('client errors are not transient; transport failures are', () async {
+    final client = ApiClient(
+      client: MockClient(
+        (_) async => http.Response(
+          '{"error":{"code":"event_conflict","message":"Conflict"}}',
+          409,
+        ),
+      ),
+    );
+    await expectLater(
+      client.post('/process_events', {}),
+      throwsA(isA<ApiException>().having((e) => e.isTransient, 't', isFalse)),
+    );
+    client.close();
+    final offline = ApiClient(
+      client: MockClient((_) async => throw const SocketException('down')),
+    );
+    await expectLater(
+      offline.get('/health'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.code, 'code', 'unreachable')
+            .having((e) => e.isTransient, 'transient', isTrue),
+      ),
+    );
+    offline.close();
   });
 
   test('handles malformed successful responses', () async {

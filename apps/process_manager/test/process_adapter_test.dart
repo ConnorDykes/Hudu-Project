@@ -73,6 +73,11 @@ void main() {
       );
       expect(MacProcessAdapter.parse(''), isEmpty);
       expect(() => MacProcessAdapter.parse('malformed'), throwsException);
+      expect(
+        MacProcessAdapter.parse('ps: warning line\n$psRow').single.pid,
+        123,
+        reason: 'One unrecognized line must not hide the whole process list',
+      );
     },
   );
   test('Windows JSON handles null inaccessible identity and Unicode', () {

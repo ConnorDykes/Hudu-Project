@@ -1,11 +1,16 @@
 require "ipaddr"
 
 class Lookup < ApplicationRecord
+  # Accepted on input: 12 hex digits, or six octets separated consistently by colons or hyphens.
   MAC_FORMAT = /\A(?:[0-9a-fA-F]{12}|(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2})\z/
+  # Stored and sent to the vendor provider: uppercase, colon separated.
+  NORMALIZED_FORMAT = /\A(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\z/
+  STATUSES = %w[resolved unknown failed].freeze
 
   before_validation :normalize_mac
-  validates :mac, presence: true, format: { with: /\A(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\z/ }
-  validates :status, inclusion: { in: %w[resolved unknown failed] }
+  validates :mac, presence: true,
+    format: { with: NORMALIZED_FORMAT, message: "must be six hexadecimal octets using colons, hyphens, or no separators" }
+  validates :status, inclusion: { in: STATUSES }
   validates :vendor, length: { maximum: 255 }, allow_nil: true
   validate :valid_ipv4
   validate :vendor_matches_status
@@ -16,13 +21,11 @@ class Lookup < ApplicationRecord
 
   private
 
+  # Anything that is not a recognized MAC string is left as-is for the format validation to reject.
   def normalize_mac
     value = mac_before_type_cast
-    if value.is_a?(String) && value.match?(MAC_FORMAT)
-      self.mac = value.delete(":-").upcase.scan(/../).join(":")
-    else
-      errors.add(:mac, "must be six hexadecimal octets using colons, hyphens, or no separators")
-    end
+    return unless value.is_a?(String) && value.match?(MAC_FORMAT)
+    self.mac = value.delete(":-").upcase.scan(/../).join(":")
   end
 
   def valid_ipv4

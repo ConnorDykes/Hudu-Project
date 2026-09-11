@@ -50,10 +50,25 @@ class AuditEvent {
     'pid': pid,
     'occurred_at': occurredAt.toUtc().toIso8601String(),
   };
-  factory AuditEvent.fromJson(Map<String, dynamic> json) => AuditEvent(
-    eventId: json['event_id'] as String,
-    processName: json['process_name'] as String,
-    pid: json['pid'] as int,
-    occurredAt: DateTime.parse(json['occurred_at'] as String).toUtc(),
-  );
+
+  /// Throws [FormatException] for any shape the contract does not allow.
+  factory AuditEvent.fromJson(Map<String, dynamic> json) {
+    final eventId = json['event_id'];
+    final processName = json['process_name'];
+    final pid = json['pid'];
+    final occurredAt = json['occurred_at'];
+    if (eventId is! String ||
+        processName is! String ||
+        pid is! int ||
+        pid <= 0 ||
+        occurredAt is! String) {
+      throw const FormatException('Invalid audit event');
+    }
+    return AuditEvent(
+      eventId: eventId,
+      processName: processName,
+      pid: pid,
+      occurredAt: DateTime.parse(occurredAt).toUtc(),
+    );
+  }
 }

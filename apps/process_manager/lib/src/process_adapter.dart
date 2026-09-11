@@ -19,11 +19,18 @@ Future<ProcessResult> runBounded(
   String executable,
   List<String> arguments,
 ) async {
-  final child = await Process.start(
-    executable,
-    arguments,
-    environment: {'LC_ALL': 'C', 'LANG': 'C'},
-  );
+  final Process child;
+  try {
+    child = await Process.start(
+      executable,
+      arguments,
+      environment: {'LC_ALL': 'C', 'LANG': 'C'},
+    );
+  } on ProcessException {
+    throw const ProcessFailure(
+      'Cannot start the system process utility. Check OS permissions and installation.',
+    );
+  }
   final output = child.stdout.transform(utf8.decoder).join();
   final errors = child.stderr.transform(utf8.decoder).join();
   try {
@@ -55,19 +62,16 @@ class MacProcessAdapter implements ProcessAdapter {
   final int _ownPid;
   final Duration exitTimeout;
 
+  /// Unrecognized lines are skipped so one odd entry cannot hide every process;
+  /// output with no recognizable row at all is an error.
   static List<LocalProcess> parse(String output) {
     final rows = <LocalProcess>[];
     final pattern = RegExp(
       r'^\s*(\d+)\s+([A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(\S+)\s+(.+)$',
     );
     for (final line in const LineSplitter().convert(output)) {
-      if (line.trim().isEmpty) continue;
       final match = pattern.firstMatch(line);
-      if (match == null) {
-        throw const ProcessFailure(
-          'Unexpected process data from macOS. The list was not updated.',
-        );
-      }
+      if (match == null) continue;
       final command = match[4]!.trim();
       rows.add(
         LocalProcess(
@@ -76,6 +80,11 @@ class MacProcessAdapter implements ProcessAdapter {
           identity: '${match[2]!.replaceAll(RegExp(r'\s+'), ' ')}|$command',
           status: match[3]!.contains('Z') ? 'Exited' : 'Running',
         ),
+      );
+    }
+    if (rows.isEmpty && output.trim().isNotEmpty) {
+      throw const ProcessFailure(
+        'Unexpected process data from macOS. The list was not updated.',
       );
     }
     return rows;

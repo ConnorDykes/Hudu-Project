@@ -26,9 +26,9 @@ class VendorLookupTest < ActiveSupport::TestCase
     end
   end
 
-  test "transport errors and deadlines are mapped without leaking details or retrying" do
+  test "transport errors and timeouts are mapped without leaking details or retrying" do
     [ [ Net::OpenTimeout, "vendor_timeout" ], [ Net::ReadTimeout, "vendor_timeout" ], [ Net::WriteTimeout, "vendor_timeout" ],
-      [ VendorLookup::DeadlineExceeded, "vendor_timeout" ], [ SocketError, "vendor_unavailable" ], [ Errno::ECONNRESET, "vendor_unavailable" ],
+      [ SocketError, "vendor_unavailable" ], [ Errno::ECONNRESET, "vendor_unavailable" ],
       [ OpenSSL::SSL::SSLError, "vendor_unavailable" ], [ Net::HTTPBadResponse, "vendor_unavailable" ], [ EOFError, "vendor_unavailable" ] ].each do |exception, code|
       WebMock.reset!
       request = stub_request(:get, "https://api.macvendors.com/#{lookup_attributes[:mac]}").to_raise(exception.new("SECRET transport detail"))
@@ -46,6 +46,22 @@ class VendorLookupTest < ActiveSupport::TestCase
     assert_equal "vendor_unavailable", VendorLookup.new.call(lookup_attributes[:mac]).error_code
     assert_requested request, times: 1
     assert_not_requested :get, "https://example.com/private"
+  end
+
+  test "resolved and unknown outcomes are cached per MAC; failures are not" do
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      resolved = stub_vendor
+      2.times { assert_equal "Apple, Inc.", VendorLookup.new.call(lookup_attributes[:mac]).vendor }
+      assert_requested resolved, times: 1
+
+      unknown = stub_vendor(status: 404, mac: "02:00:00:00:00:01")
+      2.times { assert_equal "unknown", VendorLookup.new.call("02:00:00:00:00:01").status }
+      assert_requested unknown, times: 1
+
+      failing = stub_vendor(status: 500, mac: "02:00:00:00:00:02")
+      2.times { assert_equal "failed", VendorLookup.new.call("02:00:00:00:00:02").status }
+      assert_requested failing, times: 2
+    end
   end
 
   test "untrusted URL and non-normalized MAC cannot reach network" do

@@ -71,4 +71,19 @@ void main() {
       await expectLater(repository.send(event), throwsException);
     },
   );
+  test('malformed API records are reported as invalid responses', () async {
+    for (final body in ['{"data":[{}]}', '{"data":{}}', '{"data":[1]}']) {
+      final client = ApiClient(
+        client: MockClient((_) async => http.Response(body, 200)),
+      );
+      addTearDown(client.close);
+      await expectLater(
+        ApiAuditRepository(client).history(),
+        throwsA(
+          isA<ApiException>().having((e) => e.code, 'code', 'invalid_response'),
+        ),
+        reason: body,
+      );
+    }
+  });
 }

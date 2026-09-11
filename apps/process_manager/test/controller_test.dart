@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_core/desktop_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:process_manager/src/controller.dart';
@@ -249,6 +250,51 @@ void main() {
       expect(container.read(managerProvider).notice, isNotEmpty);
     });
   }
+  test(
+    'a rejected event does not block later events; a transport failure does',
+    () async {
+      final rejected = sampleEvent();
+      final deliverable = AuditEvent(
+        eventId: '1b8d1a6e-0f58-4a0b-9c3f-2f3d0a7b9c11',
+        processName: 'other-worker',
+        pid: 7001,
+        occurredAt: DateTime.utc(2026, 9, 10, 18, 31),
+      );
+      outbox.events[rejected.eventId] = rejected;
+      outbox.events[deliverable.eventId] = deliverable;
+      audit.onSend = (event) async {
+        if (event.eventId == rejected.eventId) {
+          throw const ApiException(
+            'Event ID was already used with a different payload.',
+            code: 'event_conflict',
+            statusCode: 409,
+          );
+        }
+      };
+      await controller.initialize();
+      var state = container.read(managerProvider);
+      expect(state.pending.map((e) => e.eventId), [rejected.eventId]);
+      expect(state.auditError, contains('already used'));
+      expect(audit.records.map((e) => e.eventId), [deliverable.eventId]);
+      expect(outbox.events.keys, [rejected.eventId]);
+
+      // Offline: stop after the first failure instead of timing out per event.
+      audit.sent.clear();
+      audit.onSend = (_) async =>
+          throw const ApiException('offline', code: 'unreachable');
+      final selected = processes.rows.first;
+      controller.select(selected);
+      await controller.terminate(selected);
+      state = container.read(managerProvider);
+      expect(
+        audit.sent,
+        hasLength(1),
+        reason: 'Stop at the first transport failure',
+      );
+      expect(state.pending, hasLength(2));
+      expect(state.auditError, contains('offline'));
+    },
+  );
   test('unwritable outbox disables termination before OS call', () async {
     outbox.failure = Exception('read only');
     await controller.initialize();

@@ -50,7 +50,7 @@ Example `201` response:
 | Provider rate limit | `503` | `status: "failed"`, `vendor: null` |
 | Invalid input | `422` | No record created |
 
-An unknown vendor is not an HTTP missing-resource error. Accepted provider failures are persisted; error responses may contain that record in `data`. A local ARP miss must not call this endpoint with a fabricated MAC. Repeating `POST /lookups` creates another accepted attempt; this endpoint does not share process-event idempotency.
+An unknown vendor is not an HTTP missing-resource error. Accepted provider failures are persisted; error responses may contain that record in `data`. Resolved and unknown provider answers are cached per MAC for 24 hours so repeated lookups of one device do not consume the provider's rate limit; each request still creates its own history record. A local ARP miss must not call this endpoint with a fabricated MAC. Repeating `POST /lookups` creates another accepted attempt; this endpoint does not share process-event idempotency.
 
 ## Record a process event
 
@@ -109,6 +109,7 @@ Lookup ordering is `created_at DESC, id DESC`; process-event ordering is `occurr
 | `404` | Unknown API route; JSON error response |
 | `409` | `event_conflict`: event ID reused with a different payload |
 | `422` | `invalid_input`: invalid request or pagination |
+| `500` | `internal_error`: unexpected server failure; details are logged, never returned |
 | `502` | `vendor_unavailable` |
 | `503` | `vendor_rate_limited` |
 | `504` | `vendor_timeout` |

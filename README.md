@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **85 Flutter tests and 39 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **89 Flutter tests and 41 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 

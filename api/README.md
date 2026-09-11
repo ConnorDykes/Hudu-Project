@@ -40,9 +40,13 @@ timezone offsets compare equal. The API never terminates a process.
 Vendor lookup uses [MACVendors' documented API](https://macvendors.com/api): plain
 text on 200, unknown on 404, rate-limited on 429. The free service documents one
 request per second and 1,000/day; requests are not automatically retried. The
-adapter has 2-second connect, 3-second read/write, and 6-second total timeouts,
-a bounded response body, TLS verification, and no redirect following. Provider
-error bodies are never sent to clients. A live smoke on 2026-09-10 returned
+adapter has 2-second connect and 3-second read/write timeouts, a bounded response
+body, TLS verification, and no redirect following. Resolved and unknown results
+are cached per MAC for 24 hours in `Rails.cache` so repeated lookups of one device
+do not spend the provider's rate limit; failures are never cached. Provider error
+bodies are never sent to clients, and failures are logged by error class only.
+An unexpected server failure returns the same JSON envelope with `500` and code
+`internal_error`. A live smoke on 2026-09-10 returned
 `Apple, Inc.` for the example MAC; automated tests never use the live provider.
 
 ## Checks
