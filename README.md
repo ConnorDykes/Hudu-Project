@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **89 Flutter tests and 41 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **90 Flutter tests and 41 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 
@@ -25,7 +25,7 @@ Both applications and the API are implemented, with native macOS and Windows CI 
 | Main workflow | Send the discovered MAC to Rails for vendor lookup | Confirm the selected process identity, request termination, observe exit |
 | Persisted history | Resolved, unknown-vendor, and provider-failure outcomes | Confirmed termination events with original occurrence time |
 | Failure handling | Distinguish ARP miss, unknown vendor, API outage, and provider failure | Distinguish access denial, stale identity, unconfirmed exit, and audit failure |
-| Convenience | Detect a primary active IPv4 address where available | Configurable auto-refresh; durable audit retry without repeating termination |
+| Convenience | Detect a primary active IPv4 address where available; Cmd/Ctrl+L focuses the address field | Configurable auto-refresh; keyboard search, selection, and refresh; durable audit retry without repeating termination |
 
 ## Architecture
 
@@ -154,6 +154,6 @@ Start Rails before using API-backed features. macOS builds require macOS 12 or l
 
 ## Documentation and AI collaboration
 
-[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md)
+[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md) · [Original plan](docs/implementation-plan.md)
 
 The main agent owned contracts, shared infrastructure, integration, and delivery. Scoped subagents implemented the API, each desktop app, build tooling, and documentation; separate review agents checked the work. The [AI development log](docs/ai-development.md) records actual findings, corrections, and verification boundaries. The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.

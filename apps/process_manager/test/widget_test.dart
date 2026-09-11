@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:process_manager/process_manager_app.dart';
@@ -139,6 +140,43 @@ void main() {
     expect(find.text('No termination events yet'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'keyboard: Ctrl+F focuses search, arrows move selection, Esc clears',
+    (tester) async {
+      await renderApp(tester);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.focusNode!.hasFocus, isTrue);
+      await tester.enterText(find.byType(TextField), 'sleep');
+      await tester.pumpAndSettle();
+      expect(find.text('WindowServer'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(field.controller!.text, isEmpty);
+      expect(find.text('WindowServer'), findsOneWidget);
+      // Leave the text field so arrows reach the page shortcuts.
+      field.focusNode!.unfocus();
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      var scope = tester.element(find.byType(ProcessManagerPage));
+      expect(
+        ProviderScope.containerOf(scope).read(managerProvider).selected?.name,
+        'Activity Monitor',
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      scope = tester.element(find.byType(ProcessManagerPage));
+      expect(
+        ProviderScope.containerOf(scope).read(managerProvider).selected?.name,
+        'design-preview',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('OS error is distinct from empty list', (tester) async {
     await renderApp(
       tester,

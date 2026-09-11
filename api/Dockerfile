@@ -13,7 +13,13 @@ COPY Gemfile Gemfile.lock ./
 RUN bundle config set frozen true && bundle install
 
 COPY . .
-RUN chmod +x bin/docker-entrypoint && mkdir -p storage tmp/pids log
+# Run as an unprivileged user. Only the writable runtime paths are owned by it;
+# the named volume mounted at /rails/storage inherits this ownership on first use.
+RUN groupadd --system --gid 1000 rails && \
+    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
+    chmod +x bin/docker-entrypoint && mkdir -p storage tmp/pids tmp/cache log && \
+    chown -R rails:rails storage tmp log db
+USER 1000:1000
 
 VOLUME /rails/storage
 EXPOSE 3000

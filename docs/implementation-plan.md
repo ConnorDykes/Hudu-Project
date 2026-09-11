@@ -1,6 +1,6 @@
 # Hudu Project — Implementation Plan
 
-This is the original planning record. Implementation is now delivered in the public repository; see [verification results](docs/verification-results.md) for completed checks and remaining distribution/manual-testing limits. The starting-point observations below describe the workspace before implementation, not its current state.
+This is the original planning record. Implementation is now delivered in the public repository; see [verification results](verification-results.md) for completed checks and remaining distribution/manual-testing limits. The starting-point observations below describe the workspace before implementation, not its current state.
 
 ## Objective
 
@@ -26,7 +26,6 @@ Use one monorepo, two independent Flutter applications, and one API-only Rails s
 ```text
 Hudu-Project/
 ├── README.md
-├── IMPLEMENTATION_PLAN.md
 ├── api/                         # Rails API, SQLite, migrations, tests
 ├── apps/
 │   ├── network_lookup/          # Flutter app + macOS/Windows runners

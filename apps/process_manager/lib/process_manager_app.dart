@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_core/desktop_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/controller.dart';
@@ -31,6 +32,8 @@ class ProcessManagerPage extends ConsumerStatefulWidget {
 class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   int _page = 0;
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+  final _pageFocus = FocusNode(debugLabel: 'process-page');
 
   @override
   void initState() {
@@ -43,7 +46,51 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
+    _pageFocus.dispose();
     super.dispose();
+  }
+
+  void _focusSearch() {
+    setState(() => _page = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _searchFocus.requestFocus();
+        _search.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _search.text.length,
+        );
+      }
+    });
+  }
+
+  /// Escape clears the filter and returns focus to the table so the arrow
+  /// keys move the selection immediately afterwards.
+  void _clearSearch() {
+    if (_search.text.isNotEmpty) {
+      _search.clear();
+      ref.read(managerProvider.notifier).search('');
+      setState(() {});
+    }
+    _pageFocus.requestFocus();
+  }
+
+  /// Arrow keys move the selection through the visible, sorted rows.
+  void _moveSelection(int delta) {
+    if (_page != 0) return;
+    final state = ref.read(managerProvider);
+    final rows = state.visible;
+    if (rows.isEmpty) return;
+    final current = state.selected == null
+        ? -1
+        : rows.indexWhere(state.selected!.sameIdentity);
+    final next = (current + delta).clamp(0, rows.length - 1);
+    ref.read(managerProvider.notifier).select(rows[next]);
+  }
+
+  void _refreshCurrent() {
+    final controller = ref.read(managerProvider.notifier);
+    unawaited(_page == 0 ? controller.refresh() : controller.refreshHistory());
   }
 
   @override
@@ -52,70 +99,98 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     final controller = ref.read(managerProvider.notifier);
     final c = context.colors;
     final refreshing = _page == 0 ? state.refreshing : state.historyLoading;
-    return DesktopShell(
-      productName: 'Process Manager',
-      title: _page == 0 ? 'Processes' : 'Audit history',
-      subtitle: _page == 0
-          ? _summary(state)
-          : 'Confirmed terminations recorded by the API · UTC',
-      busy: _page == 0
-          ? state.terminating || (state.refreshing && state.processes.isEmpty)
-          : state.historyLoading && state.history.isEmpty,
-      destinations: const [
-        DesktopDestination(label: 'Processes', icon: Icons.memory_outlined),
-        DesktopDestination(label: 'Audit history', icon: Icons.history_rounded),
-      ],
-      selectedIndex: _page,
-      onDestinationSelected: (index) {
-        setState(() => _page = index);
-        if (index == 1) unawaited(controller.refreshHistory());
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+            _focusSearch,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+            _focusSearch,
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true):
+            _refreshCurrent,
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+            _refreshCurrent,
+        const SingleActivator(LogicalKeyboardKey.escape): _clearSearch,
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            _moveSelection(1),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            _moveSelection(-1),
       },
-      actions: [
-        OutlinedButton.icon(
-          onPressed: (_page == 0 ? refreshing || state.terminating : refreshing)
-              ? null
-              : () => unawaited(
-                  _page == 0
-                      ? controller.refresh()
-                      : controller.refreshHistory(),
-                ),
-          icon: SpinningIcon(active: refreshing),
-          label: const Text('Refresh'),
-        ),
-      ],
-      footer: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          StatusPill(
-            state.historyLoading
-                ? 'Checking API'
-                : state.historyError != null
-                ? 'API unreachable'
-                : 'API connected',
-            color: state.historyLoading
-                ? c.textTertiary
-                : state.historyError != null
-                ? c.danger
-                : c.success,
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 14),
-            child: Text(
-              'Current user · no elevation',
-              style: TextStyle(fontSize: 11, color: c.textTertiary),
+      child: Focus(
+        focusNode: _pageFocus,
+        autofocus: true,
+        child: DesktopShell(
+          productName: 'Process Manager',
+          title: _page == 0 ? 'Processes' : 'Audit history',
+          subtitle: _page == 0
+              ? _summary(state)
+              : 'Confirmed terminations recorded by the API · UTC',
+          busy: _page == 0
+              ? state.terminating ||
+                    (state.refreshing && state.processes.isEmpty)
+              : state.historyLoading && state.history.isEmpty,
+          destinations: const [
+            DesktopDestination(label: 'Processes', icon: Icons.memory_outlined),
+            DesktopDestination(
+              label: 'Audit history',
+              icon: Icons.history_rounded,
             ),
+          ],
+          selectedIndex: _page,
+          onDestinationSelected: (index) {
+            setState(() => _page = index);
+            if (index == 1) unawaited(controller.refreshHistory());
+          },
+          actions: [
+            OutlinedButton.icon(
+              onPressed:
+                  (_page == 0 ? refreshing || state.terminating : refreshing)
+                  ? null
+                  : () => unawaited(
+                      _page == 0
+                          ? controller.refresh()
+                          : controller.refreshHistory(),
+                    ),
+              icon: SpinningIcon(active: refreshing),
+              label: const Text('Refresh'),
+            ),
+          ],
+          footer: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StatusPill(
+                state.historyLoading
+                    ? 'Checking API'
+                    : state.historyError != null
+                    ? 'API unreachable'
+                    : 'API connected',
+                color: state.historyLoading
+                    ? c.textTertiary
+                    : state.historyError != null
+                    ? c.danger
+                    : c.success,
+              ),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Text(
+                  'Current user · no elevation',
+                  style: TextStyle(fontSize: 11, color: c.textTertiary),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _notices(state, controller),
-          Expanded(
-            child: _page == 0 ? _processes(state, controller) : _history(state),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _notices(state, controller),
+              Expanded(
+                child: _page == 0
+                    ? _processes(state, controller)
+                    : _history(state),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -215,6 +290,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
               constraints: const BoxConstraints(maxWidth: 340),
               child: TextField(
                 controller: _search,
+                focusNode: _searchFocus,
                 onChanged: (value) {
                   controller.search(value);
                   setState(() {});
@@ -232,11 +308,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                           tooltip: 'Clear search',
                           iconSize: 14,
                           icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            _search.clear();
-                            controller.search('');
-                            setState(() {});
-                          },
+                          onPressed: _clearSearch,
                         ),
                   suffixIconConstraints: const BoxConstraints(
                     minWidth: 34,
