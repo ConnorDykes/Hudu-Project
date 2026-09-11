@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **98 Flutter tests and 46 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
+Both applications and the API are implemented, with native macOS and Windows CI builds. **100 Flutter tests and 46 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits.
 
 ## Application gallery
 
@@ -139,12 +139,12 @@ The checked-in [developer scripts](scripts/README.md) also provide setup/check/r
 
 Run `bundle exec rails test` from `api/`. From each app and `packages/desktop_core/`, run `flutter pub get`, `flutter analyze`, and `flutter test`. Run `flutter build macos --release` on macOS or `flutter build windows --release` on Windows from each app directory. See the [test and build matrix](docs/testing.md) for native smoke tests, real API integration, and packaging commands.
 
-Download the [v1.0.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.0.0):
+Download the [v1.1.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.1.0):
 
 | App | macOS · Intel + Apple Silicon | Windows · x64 |
 | --- | --- | --- |
-| Network Lookup | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-network_lookup-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-network_lookup-windows-x64.zip) |
-| Process Manager | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-process_manager-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.0.0/hudu-process_manager-windows-x64.zip) |
+| Network Lookup | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.1.0/hudu-network_lookup-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.1.0/hudu-network_lookup-windows-x64.zip) |
+| Process Manager | [Universal app](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.1.0/hudu-process_manager-macos-universal.zip) | [Complete Windows bundle](https://github.com/ConnorDykes/Hudu-Project/releases/download/v1.1.0/hudu-process_manager-windows-x64.zip) |
 
 Start Rails before using API-backed features. macOS builds require macOS 12 or later. On Windows, extract the **entire** archive together and install the [Visual C++ x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) if needed. These are development bundles without verified signing/notarization or installers; if platform security blocks a download, build from reviewed source rather than disabling system-wide protections. Native CI, artifact provenance, checksums, and manual-testing limits are recorded in the release notes and [verification record](docs/verification-results.md).
 
