@@ -25,11 +25,27 @@ class VendorsTest < ActionDispatch::IntegrationTest
     [ { mac: "02:11:22:33:44:55" }, { name: "No address" }, { mac: "zz:11:22", name: "Bad" },
       { mac: "02:11:22:33:44:55", name: " " }, { mac: "02:11:22:33:44:55", name: "a" * 256 },
       { mac: "02:11:22:33:44:55", name: "<script>" }, { mac: [ "02:11:22" ], name: "Array" },
-      { mac: "02:11:22:33:44:55", name: 42 } ].each do |payload|
+      { mac: "02:11:22:33:44:55", name: 42 }, { oui: "0:21:12:2", name: "Malformed" },
+      { mac: "02:11-22:33:44:55", name: "Mixed separators" } ].each do |payload|
       assert_no_difference("Vendor.count") { post "/vendors", params: payload, as: :json }
       assert_response :unprocessable_content, payload.inspect
       assert_equal "invalid_input", response.parsed_body.dig("error", "code")
     end
+  end
+
+  test "a concurrent vendor insertion returns 409 and preserves the existing vendor" do
+    existing = Vendor.create!(oui: "02:11:22", name: "First")
+    find_by = Vendor.method(:find_by)
+    calls = 0
+    Vendor.stub(:find_by, ->(*args) { calls += 1; calls == 1 ? nil : find_by.call(*args) }) do
+      assert_no_difference("Vendor.count") do
+        post "/vendors", params: { oui: "02:11:22", name: "Second" }, as: :json
+      end
+    end
+    assert_response :conflict
+    assert_equal "vendor_exists", response.parsed_body.dig("error", "code")
+    assert_equal existing.id, response.parsed_body.dig("data", "id")
+    assert_equal "First", existing.reload.name
   end
 
   test "a named vendor resolves lookups locally without calling the provider" do

@@ -26,5 +26,6 @@ module Api
     config.api_only = true
     config.action_controller.wrap_parameters_by_default = false
     config.time_zone = "UTC"
+    config.exceptions_app = ->(env) { ApiExceptions.call(env) }
   end
 end

@@ -46,7 +46,7 @@ The API receives the MAC and optional IPv4 address; it does not discover the MAC
 
 ARP applies to local IPv4 neighbors. The gateway MAC is not a remote host's MAC. A machine's own MAC may require local interface metadata because its own address need not appear in the ARP cache. Automatic address selection must account for multiple interfaces and VPNs. IPv6 neighbor discovery is outside the initial scope.
 
-The vendor adapter uses a fixed `https://api.macvendors.com/` host with bounded request time and response size. A live lookup and persisted response were verified separately from deterministic tests, which stub that boundary. Availability and rate limits belong to the external service.
+The vendor adapter uses a fixed `https://api.macvendors.com/` host, a two-second connection timeout, three-second per-operation read/write timeouts, and a 1 KiB streamed response limit for all statuses. These timeouts bound inactivity, not total wall-clock request time. A live lookup and persisted response were verified separately from deterministic tests, which stub that boundary. Availability and rate limits belong to the external service.
 
 ## Termination and audit lifecycle
 

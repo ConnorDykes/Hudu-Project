@@ -35,6 +35,12 @@ jobs:
           bundler-cache: true
       - name: Prepare SQLite and run Minitest
         run: bundle exec rails db:prepare test
+      - name: Verify production boot and autoloading
+        env:
+          RAILS_ENV: production
+          SECRET_KEY_BASE_DUMMY: '1'
+          FORCE_SSL: 'false'
+        run: bundle exec rails zeitwerk:check
       - name: RuboCop
         run: bundle exec rubocop
       - name: Brakeman

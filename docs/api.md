@@ -118,13 +118,15 @@ Lookup ordering is `created_at DESC, id DESC`; process-event ordering is `occurr
 
 | HTTP | Contract meaning |
 | --- | --- |
-| `400` | Malformed JSON; JSON error response |
+| `400` | Malformed JSON (`invalid_json`) or malformed HTTP parameters (`invalid_input`) |
 | `404` | Unknown API route; JSON error response |
 | `409` | `event_conflict`: event ID reused with a different payload |
 | `422` | `invalid_input`: invalid request or pagination |
-| `500` | `internal_error`: unexpected server failure; details are logged, never returned |
+| `500` | `internal_error`: unexpected server failure in production; details are logged, never returned |
 | `502` | `vendor_unavailable` |
 | `503` | `vendor_rate_limited` |
 | `504` | `vendor_timeout` |
 
-Do not require `data` on every error. Do not infer a failed termination from an audit HTTP failure: the OS action and its delivery are separate operations. Database-readiness failure behavior beyond the health success payload should be checked against the final implementation.
+Development retains Rails' detailed responses for unexpected exceptions, while the test environment raises unexpected exceptions. Production JSON errors are formatted through `config.exceptions_app`, preserving Rails' logging and exception reporting.
+
+Do not require `data` on every error. Do not infer a failed termination from an audit HTTP failure: the OS action and its delivery are separate operations. `/health` returns `503 database_unavailable` when its database readiness query fails.

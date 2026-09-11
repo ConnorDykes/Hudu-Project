@@ -16,7 +16,7 @@ module ActiveSupport
     # empty vendors table; the transactional wrapper restores the seeds after.
     setup { Vendor.delete_all }
 
-    # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
+    # Synthetic request data shared by model, service, and integration tests.
     def lookup_attributes
       { mac: "00:1B:63:84:45:E6", ip: "192.0.2.10" }
     end
@@ -32,7 +32,5 @@ module ActiveSupport
       stub_request(:get, "https://api.macvendors.com/#{mac}")
         .to_return(status: status, body: body, headers: { "Content-Type" => content_type })
     end
-
-    # Add more helper methods to be used by all tests here...
   end
 end

@@ -48,6 +48,39 @@ class VendorLookupTest < ActiveSupport::TestCase
     assert_not_requested :get, "https://example.com/private"
   end
 
+  test "oversized error bodies are bounded just like successful responses" do
+    [ 404, 429, 500 ].each do |status|
+      stub_vendor(status: status, body: "SECRET" * 1024)
+      result = VendorLookup.new.call(lookup_attributes[:mac])
+      assert_equal "failed", result.status
+      assert_equal "vendor_unavailable", result.error_code
+      assert_not_includes result.message, "SECRET"
+    end
+  end
+
+  test "provider cache expires after 24 hours" do
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      provider = stub_vendor
+      VendorLookup.new.call(lookup_attributes[:mac])
+      travel 24.hours + 1.second do
+        VendorLookup.new.call(lookup_attributes[:mac])
+      end
+      assert_requested provider, times: 2
+    end
+  end
+
+  test "a newly named vendor takes precedence over a cached unknown result" do
+    Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
+      provider = stub_vendor(status: 404)
+      assert_equal "unknown", VendorLookup.new.call(lookup_attributes[:mac]).status
+      Vendor.create!(oui: lookup_attributes[:mac], name: "Local name")
+      result = VendorLookup.new.call(lookup_attributes[:mac])
+      assert_equal "resolved", result.status
+      assert_equal "Local name", result.vendor
+      assert_requested provider, times: 1
+    end
+  end
+
   test "resolved and unknown outcomes are cached per MAC; failures are not" do
     Rails.stub(:cache, ActiveSupport::Cache::MemoryStore.new) do
       resolved = stub_vendor
@@ -65,7 +98,7 @@ class VendorLookupTest < ActiveSupport::TestCase
   end
 
   test "untrusted URL and non-normalized MAC cannot reach network" do
-    [ "https://example.com/", "001b638445e6", "00:1B:63:84:45:E6/../secret" ].each do |mac|
+    [ "https://example.com/", "001b638445e6", "00:1B:63:84:45:E6/../secret", nil, 123 ].each do |mac|
       assert_raises(ArgumentError) { VendorLookup.new.call(mac) }
     end
     assert_not_requested :get, /./

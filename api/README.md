@@ -42,13 +42,19 @@ timezone offsets compare equal. The API never terminates a process.
 Vendor lookup uses [MACVendors' documented API](https://macvendors.com/api): plain
 text on 200, unknown on 404, rate-limited on 429. The free service documents one
 request per second and 1,000/day; requests are not automatically retried. The
-adapter has 2-second connect and 3-second read/write timeouts, a bounded response
-body, TLS verification, and no redirect following. Resolved and unknown results
+adapter has a 2-second connect timeout and 3-second per-operation read/write
+timeouts, TLS verification, and no redirect following. These are inactivity
+limits, not a total request deadline. Every response status is streamed through
+a 1 KiB body limit; truncated responses with a declared content length are rejected.
+Resolved and unknown results
 are cached per MAC for 24 hours in `Rails.cache` so repeated lookups of one device
 do not spend the provider's rate limit; failures are never cached. Provider error
 bodies are never sent to clients, and failures are logged by error class only.
-An unexpected server failure returns the same JSON envelope with `500` and code
-`internal_error`. A live smoke on 2026-09-10 returned
+In production, an unexpected server failure returns the JSON envelope with `500`
+and code `internal_error` through Rails' exception middleware. Development retains
+Rails' detailed debugging responses; unexpected exceptions propagate in tests.
+Malformed HTTP parameters return `400`; well-formed but invalid payloads return `422`.
+A live smoke on 2026-09-10 returned
 `Apple, Inc.` for the example MAC; automated tests never use the live provider.
 
 ## Checks
@@ -63,6 +69,10 @@ bin/bundler-audit check --update
 
 WebMock prohibits all network access in tests. `json` is constrained below version
 3 because Rails 8.1.3.1 calls its parser with a positional options hash.
+
+The [Rails review](../docs/rails-review.md) records the September 11 corrections,
+57-test verification, and design decisions to discuss in the interview. CI also
+checks production boot with `RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 FORCE_SSL=false bin/rails zeitwerk:check`.
 
 ## Optional development container
 

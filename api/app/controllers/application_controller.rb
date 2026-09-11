@@ -1,16 +1,14 @@
 class ApplicationController < ActionController::API
-  # Declared first so the more specific handlers below take precedence.
-  # Every response, including an unexpected failure, uses the same JSON error envelope.
-  rescue_from StandardError do |exception|
-    Rails.logger.error { "#{exception.class}: #{exception.message}\n  #{Array(exception.backtrace).first(12).join("\n  ")}" }
-    Rails.error.report(exception, handled: false)
-    render_error(:internal_server_error, "internal_error", "The API could not complete this request.")
-  end
+  class InvalidPayload < StandardError; end
+
   rescue_from ActionDispatch::Http::Parameters::ParseError do
     render_error(:bad_request, "invalid_json", "Request body must contain valid JSON.")
   end
-  rescue_from ActionController::ParameterMissing, ActionController::BadRequest do
+  rescue_from ActionController::ParameterMissing, InvalidPayload do
     render_error(:unprocessable_content, "invalid_input", "Request parameters are invalid.")
+  end
+  rescue_from ActionController::BadRequest do
+    render_error(:bad_request, "invalid_input", "Request parameters are malformed.")
   end
   rescue_from ActiveRecord::RecordInvalid do |exception|
     render_error(:unprocessable_content, "invalid_input", exception.record.errors.full_messages.join(". "))
@@ -31,7 +29,7 @@ class ApplicationController < ActionController::API
   def permitted_payload(*keys)
     keys.each do |key|
       if params[key].is_a?(Array) || params[key].is_a?(ActionController::Parameters)
-        raise ActionController::BadRequest
+        raise InvalidPayload
       end
     end
     params.permit(*keys)

@@ -24,7 +24,7 @@ Unknown vendor: `201`, same record with `vendor:null,status:"unknown"` (a comple
 
 `GET /process_events?limit=30&offset=0`: same pagination envelope; order occurred_at desc then id desc.
 
-`GET /health`: `200 {"status":"ok"}` with DB readiness check. Unknown API route returns JSON 404; malformed JSON returns JSON 400; an unexpected server failure returns JSON 500 with code `internal_error`.
+`GET /health`: `200 {"status":"ok"}` with DB readiness check. Unknown API route returns JSON 404; malformed JSON returns JSON 400 (`invalid_json`); malformed HTTP parameters return 400 (`invalid_input`). In production, an unexpected server failure returns JSON 500 with code `internal_error`. Development retains Rails' detailed debugging responses, and unexpected errors propagate in the test environment.
 
 ## Client conventions
 

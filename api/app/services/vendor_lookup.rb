@@ -5,8 +5,8 @@ require "net/http"
 #
 # Resolved and unknown outcomes are cached so repeated lookups of the same
 # device do not consume the provider's rate limit; provider failures are never
-# cached. Request time is bounded by Net::HTTP's own phase timeouts rather than
-# Timeout.timeout, which is unsafe inside a threaded Puma worker.
+# cached. Net::HTTP limits connection and individual read/write operations;
+# those are inactivity timeouts, not a total wall-clock request deadline.
 class VendorLookup
   ENDPOINT = "https://api.macvendors.com/"
   OPEN_TIMEOUT = 2
@@ -18,7 +18,7 @@ class VendorLookup
 
   def call(mac)
     # Only normalized MACs can reach the fixed provider host; never accept a URL.
-    raise ArgumentError, "Expected a normalized MAC" unless mac.match?(Lookup::NORMALIZED_FORMAT)
+    raise ArgumentError, "Expected a normalized MAC" unless mac.is_a?(String) && mac.match?(Lookup::NORMALIZED_FORMAT)
     if (local = Vendor.for_mac(mac))
       return Result.new(status: "resolved", vendor: local.name, http_status: 201, error_code: nil, message: nil)
     end
@@ -65,6 +65,7 @@ class VendorLookup
     http.read_timeout = READ_TIMEOUT
     http.write_timeout = READ_TIMEOUT
     http.max_retries = 0
+    http.ignore_eof = false
     get = Net::HTTP::Get.new(uri)
     get["Accept"] = "text/plain"
     get["User-Agent"] = "Hudu-Project/1.0"
@@ -72,12 +73,13 @@ class VendorLookup
     http.start do |connection|
       connection.request(get) do |response|
         body = +""
-        # Error bodies are deliberately neither parsed nor returned to clients.
-        if response.code == "200"
-          response.read_body do |chunk|
-            raise InvalidResponse if body.bytesize + chunk.bytesize > MAX_BODY_BYTES
-            body << chunk
-          end
+        bytes_read = 0
+        # Stream every status: Net::HTTP otherwise buffers an unread error body
+        # after this block returns. Error text is discarded, never parsed/logged.
+        response.read_body do |chunk|
+          bytes_read += chunk.bytesize
+          raise InvalidResponse if bytes_read > MAX_BODY_BYTES
+          body << chunk if response.code == "200"
         end
         outcome = [ response.code, response.content_type, body ]
       end

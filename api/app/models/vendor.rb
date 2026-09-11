@@ -2,7 +2,7 @@
 # Seeded rows are a small offline subset of the IEEE registry; user rows are
 # names people assign when neither the table nor the public service knows a MAC.
 class Vendor < ApplicationRecord
-  OUI_INPUT = /\A(?:[0-9a-fA-F]{6}|(?:[0-9a-fA-F]{2}[:-]){2}[0-9a-fA-F]{2})\z/
+  OUI_INPUT = /\A(?:[0-9a-fA-F]{6}|(?:[0-9a-fA-F]{2}:){2}[0-9a-fA-F]{2}|(?:[0-9a-fA-F]{2}-){2}[0-9a-fA-F]{2})\z/
   OUI_FORMAT = /\A(?:[0-9A-F]{2}:){2}[0-9A-F]{2}\z/
   SOURCES = %w[seed user].freeze
 
@@ -14,9 +14,8 @@ class Vendor < ApplicationRecord
 
   # Accepts a full MAC in any accepted form, or just the OUI.
   def self.oui_for(value)
-    return nil unless value.is_a?(String)
+    return nil unless value.is_a?(String) && (value.match?(OUI_INPUT) || value.match?(Lookup::MAC_FORMAT))
     digits = value.delete(":-").upcase
-    return nil unless digits.match?(/\A[0-9A-F]{6}(?:[0-9A-F]{6})?\z/)
     digits[0, 6].scan(/../).join(":")
   end
 

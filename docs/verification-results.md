@@ -1,6 +1,12 @@
 # Current verification results
 
-Submission release: **v1.1.0**. Checked September 10, 2026 (America/Denver; September 11 UTC). Historical counts and previous release evidence are kept in the [historical verification record](verification-history.md).
+## Rails follow-up review — September 11, 2026
+
+The Rails source review after v1.1.0 passes **57 tests / 630 assertions**, with 40 Ruby files clean under RuboCop, no Brakeman warnings or dependency advisories, and successful development/production autoload checks. A fresh isolated production database and server passed both clients' real HTTP smoke suites (two Network Lookup cases, one Process Manager case), using a seeded vendor for the lookup round trip. Production JSON 500 responses and HEAD semantics were also checked in a production-mode Rails process. These are local verification results for the source follow-up; the v1.1.0 download archives are unchanged. See the [Rails review](rails-review.md) for scope, corrections, and limits.
+
+## Published v1.1.0 evidence
+
+Submission release: **v1.1.0**. Checked September 10, 2026 (America/Denver; September 11 UTC). The records below describe that published revision; its 46-test Rails total predates the follow-up review. Historical counts and previous release evidence are kept in the [historical verification record](verification-history.md).
 
 ## Revision and release
 
@@ -8,7 +14,7 @@ Submission release: **v1.1.0**. Checked September 10, 2026 (America/Denver; Sept
 - Release CI: **all nine jobs passed** in [run 34561343251](https://github.com/ConnorDykes/Hudu-Project/actions/runs/34561343251), including all four native app/platform builds.
 - Distribution: [v1.1.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.1.0), containing the four unmodified archives from that run and `SHA256SUMS.txt`. The release tag adds documentation only after the application code above. The README links to these current archives; v1.0.0 predates the current UI, vendor naming, and batch termination.
 
-## Current local evidence
+## v1.1.0 local evidence
 
 `bash scripts/dev.sh check` passed with the pinned Ruby 4.0.2 and Flutter 3.47.2 toolchains. Both apps are versioned **1.1.0+2** for the native release builds.
 

@@ -2,7 +2,7 @@
 # vendor service remains the full source; these answer without a network call
 # and let the app work offline for the devices people most often look up.
 # Idempotent: re-running updates names without touching user-created vendors.
-SEED_VENDORS = {
+seed_vendors = {
   "00:03:93" => "Apple, Inc.",
   "00:1B:63" => "Apple, Inc.",
   "00:1E:C2" => "Apple, Inc.",
@@ -36,7 +36,7 @@ SEED_VENDORS = {
   "00:1C:42" => "Parallels, Inc."
 }.freeze
 
-SEED_VENDORS.each do |oui, name|
+seed_vendors.each do |oui, name|
   vendor = Vendor.find_or_initialize_by(oui: oui)
   next if vendor.persisted? && vendor.source == "user"
   vendor.update!(name: name, source: "seed")
