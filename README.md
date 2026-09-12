@@ -148,13 +148,6 @@ Download the [v1.1.0 development release](https://github.com/ConnorDykes/Hudu-Pr
 
 Start Rails before using API-backed features. macOS builds require macOS 12 or later. On Windows, extract the **entire** archive together and install the [Visual C++ x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) if needed. These are development bundles without verified signing/notarization or installers; if platform security blocks a download, build from reviewed source rather than disabling system-wide protections. Native CI, artifact provenance, checksums, and manual-testing limits are recorded in the release notes and [verification record](docs/verification-results.md).
 
-## Engineering choices and limits
-
-- **Local IPv4 discovery:** ARP cannot identify a remote host's MAC across routers. An absent cache entry does not prove a device is offline. IPv6 discovery is outside the initial scope; VPNs and multiple adapters can make automatic address selection ambiguous.
-- **Lookup endpoint:** `GET /lookups?mac=...` performs a lookup exactly as the brief illustrates; the desktop client uses the equivalent `POST /lookups` because the operation creates a history record. Plain `GET /lookups` reads history. See [API reference](docs/api.md).
-- **Truthful process outcomes:** requesting termination is distinct from observing exit. Permissions and platform semantics apply. macOS PID-based signaling retains a race between identity validation and signaling.
-- **Independent audit delivery:** confirmed exits are queued locally with a stable event ID. Delivery retries never terminate a process again. Recovery and retry behavior have automated tests; disk-write failures are explicit, and a crash between exit and durable persistence can still lose an event.
-- **Local service:** the API has no authentication. Bind it to loopback; this project does not provide a public hosted API, signed installers, notarization, or an App Store distribution claim.
 
 ## Documentation and AI collaboration
 
