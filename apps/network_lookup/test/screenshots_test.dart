@@ -1,46 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:desktop_core/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/lookup/lookup_controller.dart';
-import 'package:network_lookup/lookup/lookup_repository.dart';
-import 'package:network_lookup/main.dart';
+import 'package:network_lookup/src/lookup/lookup_controller.dart';
+import 'package:network_lookup/src/lookup/lookup_repository.dart';
+import 'package:network_lookup/network_lookup_app.dart';
 
 import 'test_support.dart';
 
 // Actual production widgets with injected synthetic data, never a fake app mode.
 // Opt in on the golden's host platform to avoid cross-platform raster differences:
 // UPDATE_GOLDENS=true flutter test --update-goldens test/screenshots_test.dart
-Future<void> _loadFonts() async {
-  final font = FontLoader('packages/desktop_core/Inter')
-    ..addFont(rootBundle.load('packages/desktop_core/assets/fonts/Inter.ttf'));
-  await font.load();
-  final mono = FontLoader('packages/desktop_core/JetBrainsMono')
-    ..addFont(
-      rootBundle.load(
-        'packages/desktop_core/assets/fonts/JetBrainsMono-Regular.ttf',
-      ),
-    );
-  await mono.load();
-  final icons = FontLoader('MaterialIcons')
-    ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
-  await icons.load();
-}
-
 Future<void> _mount(
   WidgetTester tester, {
   required FakeLookupRepository repository,
   Size size = const Size(1440, 1000),
 }) async {
-  await _loadFonts();
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
-  addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+  await loadBundledFonts();
+  configureTestView(tester, size: size, brightness: Brightness.dark);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

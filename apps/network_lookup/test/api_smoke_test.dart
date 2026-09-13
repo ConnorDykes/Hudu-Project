@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:desktop_core/desktop_core.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/lookup/lookup_repository.dart';
+import 'package:network_lookup/src/lookup/lookup_repository.dart';
 
 import 'test_support.dart';
 

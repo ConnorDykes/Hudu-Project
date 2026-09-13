@@ -1,3 +1,5 @@
+import 'package:desktop_core/desktop_core.dart';
+
 class LocalProcess {
   const LocalProcess({
     required this.pid,
@@ -27,8 +29,9 @@ enum ExitOutcome {
   forbidden,
 }
 
-class ProcessFailure implements Exception {
+class ProcessFailure implements UserFacingFailure {
   const ProcessFailure(this.message);
+  @override
   final String message;
   @override
   String toString() => message;

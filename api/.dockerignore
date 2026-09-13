@@ -2,7 +2,6 @@
 .bundle
 .env
 .env.*
-!.env.example
 config/master.key
 config/credentials*
 log/*

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:desktop_core/testing.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +8,6 @@ import 'package:process_manager/src/controller.dart';
 import 'package:process_manager/src/models.dart';
 
 import 'support/fakes.dart';
-import 'support/fonts.dart';
 
 class _SnapshotController extends ManagerController {
   _SnapshotController(this.snapshot);
@@ -25,11 +25,8 @@ Future<void> renderApp(
   ManagerState? snapshot,
   Size size = const Size(1280, 820),
 }) async {
-  await loadTestFonts();
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+  await loadBundledFonts();
+  configureTestView(tester, size: size);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

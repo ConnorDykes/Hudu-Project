@@ -135,8 +135,7 @@ class LookupController extends Notifier<LookupState> {
   }
 }
 
-String friendlyError(Object error) => switch (error) {
-  NetworkFailure(:final message) => message,
-  ApiException(:final message) => message,
-  _ => 'The lookup could not be completed. Please try again.',
-};
+String friendlyError(Object error) => describeFailure(
+  error,
+  fallback: 'The lookup could not be completed. Please try again.',
+);

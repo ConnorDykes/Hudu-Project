@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/network/network_adapter.dart';
+import 'package:network_lookup/src/network/network_adapter.dart';
 
 // Controlled process contract only: none of these deadline tests start an OS
 // process, use a real PID, or wait on wall-clock time. They run on Windows too.

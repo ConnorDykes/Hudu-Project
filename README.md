@@ -6,7 +6,7 @@ Two independent Flutter desktop apps with a shared Rails API: **Network Lookup**
 
 [![CI](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ConnorDykes/Hudu-Project/actions/workflows/ci.yml)
 
-Both applications and the API are implemented, with native macOS and Windows CI builds. **100 Flutter tests and 57 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits, including the [Rails follow-up review](docs/rails-review.md).
+Both applications and the API are implemented, with native macOS and Windows CI builds. **100 Flutter tests and 57 Rails tests** pass in the documented local verification. See the [verification record](docs/verification-results.md) for exact evidence and limits, including the [Rails follow-up review](docs/verification-history.md#rails-review-september-11-2026).
 
 ## Application gallery
 
@@ -57,7 +57,7 @@ flowchart LR
   Rails <-->|HTTPS · MAC vendor query| Vendor["External vendor service"]
 ```
 
-OS operations execute on the desktop client. Rails stores history and queries the external vendor service; it has no process-control endpoint. Each app runs without launching the other. The API is a separate service and is not embedded in either application bundle. See [Architecture](docs/architecture.md) and the canonical [API contracts](docs/contracts.md).
+OS operations execute on the desktop client. Rails stores history and queries the external vendor service; it has no process-control endpoint. Each app runs without launching the other. The API is a separate service and is not embedded in either application bundle. See [Architecture](docs/architecture.md) and the [API reference](docs/api.md).
 
 ## Run locally
 
@@ -133,7 +133,7 @@ docker compose logs api
 
 Compose prepares SQLite, persists it in a named volume, and publishes only `127.0.0.1:3000`. Run Flutter on the native host as above. `docker compose down` stops the API while retaining history. CI exercises container startup, JSON requests, and persistence across restart.
 
-The checked-in [developer scripts](scripts/README.md) also provide setup/check/run/build commands. For example, `bash scripts/dev.sh setup` then `bash scripts/dev.sh run network_lookup` on macOS; with Rails in WSL2 or Docker, use `./scripts/dev.ps1 setup flutter` then `./scripts/dev.ps1 run network_lookup` on Windows.
+The checked-in [developer scripts](docs/development.md#developer-scripts) also provide setup/check/run/build commands. For example, `bash scripts/dev.sh setup` then `bash scripts/dev.sh run network_lookup` on macOS; with Rails in WSL2 or Docker, use `./scripts/dev.ps1 setup` then `./scripts/dev.ps1 run network_lookup` on Windows.
 
 ## Tests, builds, and downloads
 
@@ -151,6 +151,6 @@ Start Rails before using API-backed features. macOS builds require macOS 12 or l
 
 ## Documentation and AI collaboration
 
-[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md) · [Original plan](docs/implementation-plan.md)
+[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md) · [Verification history](docs/verification-history.md)
 
 The main agent owned contracts, shared infrastructure, integration, and delivery. Scoped subagents implemented the API, each desktop app, build tooling, and documentation; separate review agents checked the work. The [AI development log](docs/ai-development.md) records actual findings, corrections, and verification boundaries. The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.

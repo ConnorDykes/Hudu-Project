@@ -4,13 +4,16 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-class ApiException implements Exception {
+import 'failure.dart';
+
+class ApiException implements UserFacingFailure {
   const ApiException(
     this.message, {
     this.code = 'api_error',
     this.statusCode,
     this.data,
   });
+  @override
   final String message;
   final String code;
 

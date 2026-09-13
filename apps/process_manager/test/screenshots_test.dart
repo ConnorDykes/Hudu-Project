@@ -2,13 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:desktop_core/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:process_manager/process_manager_app.dart';
 import 'package:process_manager/src/controller.dart';
 import 'package:process_manager/src/models.dart';
 
 import 'support/fakes.dart';
-import 'support/fonts.dart';
 
 // Actual production widgets with injected synthetic data, never a fake app mode.
 // Opt in on the golden's host platform to avoid cross-platform raster differences:
@@ -17,13 +17,8 @@ Future<ProviderContainer> _mount(
   WidgetTester tester, {
   FakeAudit? audit,
 }) async {
-  await loadTestFonts();
-  tester.view.physicalSize = const Size(1440, 1000);
-  tester.view.devicePixelRatio = 1;
-  tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
-  addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+  await loadBundledFonts();
+  configureTestView(tester, brightness: Brightness.dark);
   final container = ProviderContainer(
     overrides: [
       clockProvider.overrideWithValue(() => DateTime(2026, 9, 10, 14, 32, 8)),

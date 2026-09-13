@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/network/network_adapter.dart';
+import 'package:network_lookup/src/network/network_adapter.dart';
 
 const macInterfaces = '''
 lo0: flags=8049<UP,LOOPBACK,RUNNING,MULTICAST> mtu 16384

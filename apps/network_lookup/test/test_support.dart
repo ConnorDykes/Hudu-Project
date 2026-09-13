@@ -1,5 +1,5 @@
-import 'package:network_lookup/lookup/lookup_repository.dart';
-import 'package:network_lookup/network/network_adapter.dart';
+import 'package:network_lookup/src/lookup/lookup_repository.dart';
+import 'package:network_lookup/src/network/network_adapter.dart';
 
 const exampleResolution = LocalResolution(
   ip: '192.168.1.24',

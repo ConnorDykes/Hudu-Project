@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the implemented design. [contracts.md](contracts.md) is canonical for wire behavior; [verification results](verification-results.md) records execution evidence and limits.
+This document describes the implemented design. The [API reference](api.md) is canonical for wire behavior; [verification results](verification-results.md) records execution evidence and limits.
 
 ## Boundaries
 
@@ -8,12 +8,14 @@ This document describes the implemented design. [contracts.md](contracts.md) is 
 | --- | --- | --- |
 | Network Lookup | IPv4 input, local interface/neighbor discovery, vendor results, lookup history | `apps/network_lookup/` |
 | Process Manager | Process inspection, selection and confirmation, local termination, audit queue and history | `apps/process_manager/` |
-| Shared Flutter package | Common presentation components and injectable JSON transport | `packages/desktop_core/` |
+| Shared Flutter package | Theme and shell, common widgets, injectable JSON transport, bounded native command runner, test helpers | `packages/desktop_core/` |
 | Rails API | Input validation, vendor adapter, lookup persistence, idempotent audit persistence, health | `api/` |
 | SQLite | API lookup and process-event records | API-local `storage/` |
 | External vendor service | Resolve a submitted MAC to a vendor label where available | HTTPS request from Rails |
 
-The two Flutter apps are independent executables. Riverpod connects presentation to app-specific state and repositories; native adapters remain within their owning app. `desktop_core` shares theme, shell components, and `ApiClient`/`ApiException`, without owning either app's domain logic.
+The two Flutter apps are independent executables. Riverpod connects presentation to app-specific state and repositories; native adapters remain within their owning app. `desktop_core` shares the theme, the shell and common widgets, `ApiClient`/`ApiException`, the `UserFacingFailure` interface that both apps' domain failures implement, timestamp formatting, and `BoundedCommandRunner` plus `powershellCommand` for OS helper processes. It owns no domain logic.
+
+Client conventions: OS commands use fixed executables and validated argument arrays with no user input interpolated into a shell or PowerShell script; every helper process has a wall-clock deadline and an output cap, and only that helper is ever killed on timeout. Visual direction is a quiet desktop utility: neutral graphite or paper surfaces following the system theme, one blue accent, hairline borders, sentence-case labels, Inter plus JetBrains Mono for identifiers, status as a dot and a word, and 120 to 260 ms eased motion. Both apps are responsive from 960x680 up.
 
 The client default is `http://127.0.0.1:3000`, read from compile-time `API_BASE_URL`. A different value requires rerunning or rebuilding the client. For Windows development, Flutter executes on Windows while Rails may execute inside WSL2. Containers host only the API. ARP and process information must still describe the desktop host.
 

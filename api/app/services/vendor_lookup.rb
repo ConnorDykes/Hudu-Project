@@ -14,19 +14,24 @@ class VendorLookup
   MAX_BODY_BYTES = 1024
   CACHE_TTL = 24.hours
   class InvalidResponse < StandardError; end
-  Result = Data.define(:status, :vendor, :http_status, :error_code, :message)
+  # A lookup outcome. `error` is nil for resolved and unknown vendors; for a
+  # provider failure it carries the HTTP status and envelope the API returns.
+  Failure = Data.define(:http_status, :code, :message)
+  Result = Data.define(:status, :vendor, :error) do
+    def self.resolved(vendor) = new(status: "resolved", vendor: vendor, error: nil)
+    def self.unknown = new(status: "unknown", vendor: nil, error: nil)
+  end
 
   def call(mac)
     # Only normalized MACs can reach the fixed provider host; never accept a URL.
     raise ArgumentError, "Expected a normalized MAC" unless mac.is_a?(String) && mac.match?(Lookup::NORMALIZED_FORMAT)
-    if (local = Vendor.for_mac(mac))
-      return Result.new(status: "resolved", vendor: local.name, http_status: 201, error_code: nil, message: nil)
-    end
+    local = Vendor.for_mac(mac)
+    return Result.resolved(local.name) if local
     cached = Rails.cache.read(cache_key(mac))
     return Result.new(**cached) if cached
 
     result = fetch(mac)
-    Rails.cache.write(cache_key(mac), result.to_h, expires_in: CACHE_TTL) unless result.error_code
+    Rails.cache.write(cache_key(mac), result.to_h, expires_in: CACHE_TTL) unless result.error
     result
   end
 
@@ -38,7 +43,7 @@ class VendorLookup
     response_code, content_type, body = request(URI("#{ENDPOINT}#{mac}"))
     case response_code
     when "200" then resolved(body, content_type)
-    when "404" then Result.new(status: "unknown", vendor: nil, http_status: 201, error_code: nil, message: nil)
+    when "404" then Result.unknown
     when "429" then failure(503, "vendor_rate_limited", "Vendor provider rate limit reached. Please try again later.", "HTTP 429")
     else failure(502, "vendor_unavailable", "Vendor provider is unavailable. Please try again later.", "HTTP #{response_code}")
     end
@@ -55,7 +60,7 @@ class VendorLookup
     unless content_type == "text/plain" && vendor.present? && vendor.length <= 255 && !vendor.match?(/[[:cntrl:]<>]/)
       raise InvalidResponse
     end
-    Result.new(status: "resolved", vendor: vendor, http_status: 201, error_code: nil, message: nil)
+    Result.resolved(vendor)
   end
 
   def request(uri)
@@ -90,6 +95,6 @@ class VendorLookup
   def failure(http_status, code, message, cause)
     # The cause is an exception class or HTTP status only; provider bodies never reach logs or clients.
     Rails.logger.warn { "VendorLookup #{code} (#{cause})" }
-    Result.new(status: "failed", vendor: nil, http_status: http_status, error_code: code, message: message)
+    Result.new(status: "failed", vendor: nil, error: Failure.new(http_status: http_status, code: code, message: message))
   end
 end

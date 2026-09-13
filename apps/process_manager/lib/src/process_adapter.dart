@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:desktop_core/desktop_core.dart';
+
 import 'models.dart';
 
 abstract interface class ProcessAdapter {
@@ -14,39 +16,39 @@ typedef CommandRunner = Future<ProcessResult> Function(
   List<String> arguments,
 );
 
-/// Kills only its own helper on timeout, never a listed process.
+/// Bounded helper command in the C locale. On timeout only the helper itself
+/// is stopped, never a listed process. Standard error is discarded.
 Future<ProcessResult> runBounded(
   String executable,
   List<String> arguments,
 ) async {
-  final Process child;
   try {
-    child = await Process.start(
+    final output = await const BoundedCommandRunner(
+      timeout: Duration(seconds: 12),
+      maxOutputBytes: 8 * 1024 * 1024,
+      startProcess: _startInCLocale,
+    ).run(executable, arguments);
+    return ProcessResult(0, output.exitCode, output.stdout, '');
+  } on CommandFailure catch (failure) {
+    throw ProcessFailure(switch (failure.kind) {
+      CommandFailureKind.startupFailed =>
+        'Cannot start the system process utility. Check OS permissions and installation.',
+      CommandFailureKind.timedOut =>
+        'The operating system took too long to respond. Try refreshing.',
+      CommandFailureKind.tooMuchOutput ||
+      CommandFailureKind.unreadableOutput =>
+        'Unexpected process data from the operating system. The list was not updated.',
+    });
+  }
+}
+
+Future<Process> _startInCLocale(String executable, List<String> arguments) =>
+    Process.start(
       executable,
       arguments,
       environment: {'LC_ALL': 'C', 'LANG': 'C'},
+      runInShell: false,
     );
-  } on ProcessException {
-    throw const ProcessFailure(
-      'Cannot start the system process utility. Check OS permissions and installation.',
-    );
-  }
-  final output = child.stdout.transform(utf8.decoder).join();
-  final errors = child.stderr.transform(utf8.decoder).join();
-  try {
-    return await (() async => ProcessResult(
-      child.pid,
-      await child.exitCode,
-      await output,
-      await errors,
-    ))().timeout(const Duration(seconds: 12));
-  } on TimeoutException {
-    child.kill(ProcessSignal.sigkill);
-    throw const ProcessFailure(
-      'The operating system took too long to respond. Try refreshing.',
-    );
-  }
-}
 
 class MacProcessAdapter implements ProcessAdapter {
   MacProcessAdapter({

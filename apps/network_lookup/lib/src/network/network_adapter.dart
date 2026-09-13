@@ -1,6 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:desktop_core/desktop_core.dart';
 
 /// IPv4 only. Canonical decimal avoids platform-dependent octal interpretation.
 String? canonicalIpv4(String input) {
@@ -39,8 +40,9 @@ String? normalizeMac(String? input) {
   return mac;
 }
 
-class NetworkFailure implements Exception {
+class NetworkFailure implements UserFacingFailure {
   const NetworkFailure(this.message);
+  @override
   final String message;
   @override
   String toString() => message;
@@ -101,21 +103,13 @@ abstract interface class CommandRunner {
   });
 }
 
-typedef ProcessStarter = Future<Process> Function(
-  String executable,
-  List<String> arguments,
-);
-
-Future<Process> _startProcess(String executable, List<String> arguments) =>
-    Process.start(executable, arguments, runInShell: false);
-
-/// Direct processes only; bounded wall time and bounded captured output.
-/// Raw OS output is never included in a UI error (it can contain private data).
+/// Adapts the shared bounded runner to this app's wording. Raw OS output is
+/// never included in a UI error (it can contain private data).
 class NativeCommandRunner implements CommandRunner {
   const NativeCommandRunner({
     this.timeout = const Duration(seconds: 8),
     this.maxOutputBytes = 1024 * 1024,
-    this.startProcess = _startProcess,
+    this.startProcess = defaultProcessStarter,
   });
   final Duration timeout;
   final int maxOutputBytes;
@@ -127,89 +121,32 @@ class NativeCommandRunner implements CommandRunner {
     List<String> arguments, {
     Duration? timeout,
   }) async {
-    Process? process;
-    final readers = <StreamIterator<List<int>>>[];
-    var expired = false;
+    final CommandOutput output;
     try {
-      // The deadline covers process creation as well as output/exit. A process
-      // that finishes starting after expiry receives a cleanup attempt as well.
-      return await (() async {
-        final child = await startProcess(executable, arguments);
-        process = child;
-        if (expired) {
-          try {
-            child.kill();
-          } finally {
-            // Subscribe then cancel both pipes, including buffered output. Do
-            // not await stream shutdown or extend the already-expired caller.
-            child.stdout.listen(null).cancel().ignore();
-            child.stderr.listen(null).cancel().ignore();
-          }
-          throw const NetworkFailure(
-            'Network command startup exceeded its deadline.',
-          );
-        }
-        Future<String> read(Stream<List<int>> stream) async {
-          final bytes = <int>[];
-          final reader = StreamIterator(stream);
-          readers.add(reader);
-          while (await reader.moveNext()) {
-            final chunk = reader.current;
-            if (bytes.length + chunk.length > maxOutputBytes) {
-              throw const NetworkFailure(
-                'The network command returned too much data.',
-              );
-            }
-            bytes.addAll(chunk);
-          }
-          return utf8.decode(bytes, allowMalformed: false);
-        }
-
-        // stderr is drained so the child cannot block on a full pipe, but only
-        // the exit code decides success: utilities may warn and still succeed.
-        final results = await Future.wait<Object>([
-          child.exitCode,
-          read(child.stdout),
-          read(child.stderr),
-        ], eagerError: true);
-        if (results[0] != 0) {
-          throw const NetworkFailure(
-            'The operating system could not read network information. '
-            'Check network permissions and native command availability.',
-          );
-        }
-        return results[1] as String;
-      })().timeout(
-        timeout ?? this.timeout,
-        onTimeout: () {
-          expired = true;
-          throw TimeoutException('Native network command deadline exceeded');
-        },
-      );
-    } on TimeoutException {
-      throw const NetworkFailure(
-        'Reading network information timed out. Please try again.',
-      );
-    } on ProcessException {
-      throw const NetworkFailure(
-        'Cannot start the network utility. Check OS permissions and installation.',
-      );
-    } on FormatException {
-      throw const NetworkFailure(
-        'The network utility returned unreadable output.',
-      );
-    } finally {
-      // Only our own disposable command process can be terminated here.
-      try {
-        process?.kill();
-      } finally {
-        // Cancellation also releases pipes if the OS refuses termination.
-        // Completion of native cleanup is not a prerequisite for the deadline.
-        for (final reader in readers) {
-          reader.cancel().ignore();
-        }
-      }
+      output = await BoundedCommandRunner(
+        timeout: this.timeout,
+        maxOutputBytes: maxOutputBytes,
+        startProcess: startProcess,
+      ).run(executable, arguments, timeout: timeout);
+    } on CommandFailure catch (failure) {
+      throw NetworkFailure(switch (failure.kind) {
+        CommandFailureKind.timedOut =>
+          'Reading network information timed out. Please try again.',
+        CommandFailureKind.startupFailed =>
+          'Cannot start the network utility. Check OS permissions and installation.',
+        CommandFailureKind.tooMuchOutput =>
+          'The network command returned too much data.',
+        CommandFailureKind.unreadableOutput =>
+          'The network utility returned unreadable output.',
+      });
     }
+    if (output.exitCode != 0) {
+      throw const NetworkFailure(
+        'The operating system could not read network information. '
+        'Check network permissions and native command availability.',
+      );
+    }
+    return output.stdout;
   }
 }
 
@@ -464,12 +401,8 @@ $primary = if ($routes.Count -gt 0) { $routes[0].InterfaceIndex } else { -1 }
 ''';
 
   Future<String> _powershell(String script, Stopwatch elapsed) async {
-    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-    final output = await _run(
-      '$systemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-      elapsed,
-    );
+    final command = powershellCommand(script);
+    final output = await _run(command.executable, command.arguments, elapsed);
     // PowerShell emits nothing for an empty pipeline.
     return output.trim().isEmpty ? '[]' : output;
   }

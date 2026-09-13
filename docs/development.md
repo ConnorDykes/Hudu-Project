@@ -124,19 +124,26 @@ Stop the stack with `docker compose down`. Retain the database volume; `down --v
 
 ## Developer scripts
 
-The [script reference](../scripts/README.md) describes the full interface. These commands run from the repository root and require the pinned toolchains on `PATH`; they do not install toolchains or change shell profiles or PowerShell execution policy.
+These commands run from the repository root and require the pinned toolchains on `PATH`; they do not install toolchains, change shell profiles or PowerShell execution policy, or write any configuration file. `dev.sh` covers the API and the Flutter packages on macOS and in WSL2. `dev.ps1` covers only the Flutter packages, because Windows runs Rails in WSL2 or Docker.
 
 | Task | macOS / Bash | Windows / PowerShell |
 | --- | --- | --- |
-| Install dependencies and prepare database | `bash scripts/dev.sh setup` | `./scripts/dev.ps1 setup` (native Ruby required) |
-| Flutter dependencies only | `bash scripts/dev.sh setup flutter` | `./scripts/dev.ps1 setup flutter` |
-| All checks | `bash scripts/dev.sh check` | `./scripts/dev.ps1 check` (native Ruby required) |
-| Flutter checks only | `bash scripts/dev.sh check flutter` | `./scripts/dev.ps1 check flutter` |
-| Start native API | `bash scripts/dev.sh api` | `./scripts/dev.ps1 api` (native Ruby required) |
+| Install dependencies and prepare database | `bash scripts/dev.sh setup` | Flutter: `./scripts/dev.ps1 setup`; API: `bash scripts/dev.sh setup api` in WSL2 |
+| Flutter dependencies only | `bash scripts/dev.sh setup flutter` | `./scripts/dev.ps1 setup` |
+| All checks | `bash scripts/dev.sh check` | Flutter: `./scripts/dev.ps1 check`; API: `bash scripts/dev.sh check api` in WSL2 |
+| Flutter checks only | `bash scripts/dev.sh check flutter` | `./scripts/dev.ps1 check` |
+| Start native API | `bash scripts/dev.sh api` | `bash scripts/dev.sh api` in WSL2, or Docker |
 | Run Network Lookup | `bash scripts/dev.sh run network_lookup` | `./scripts/dev.ps1 run network_lookup` |
 | Run Process Manager | `bash scripts/dev.sh run process_manager` | `./scripts/dev.ps1 run process_manager` |
 
-For Windows + WSL2, use the `flutter` subset in PowerShell and `bash scripts/dev.sh setup api`, `check api`, or `api` in the Linux checkout. Bash desktop run/build commands require macOS; PowerShell desktop run/build commands require Windows. Setup/check enforce the Flutter lockfiles. API checks include tests, RuboCop, Brakeman, and dependency advisory audit; the advisory refresh accesses the network.
+Bash desktop run/build commands require macOS; PowerShell desktop run/build commands require Windows. Setup and check resolve Flutter dependencies with `--enforce-lockfile`, so the committed `pubspec.lock` files must match. `check` exits on the first failed command. API checks include tests, RuboCop, Brakeman, and the dependency advisory audit; the advisory refresh accesses the network. To run the API checks inside the container instead:
+
+```sh
+docker compose run --rm -e RAILS_ENV=test api bundle exec rails db:prepare test
+docker compose run --rm api bundle exec rubocop
+docker compose run --rm api bundle exec brakeman --no-pager
+docker compose run --rm api bundle exec ruby bin/bundler-audit check --update
+```
 
 ## Configuration and local data
 
@@ -148,7 +155,25 @@ For Windows + WSL2, use the `flutter` subset in PowerShell and `bash scripts/dev
 | Test database | `api/storage/test.sqlite3`, separate from development data |
 | Vendor provider | Current adapter uses the fixed `https://api.macvendors.com/` endpoint |
 
-For direct Flutter commands, pass `--dart-define=API_BASE_URL=...` to `flutter run` or `flutter build`; restart/rebuild to change it. The developer scripts explicitly forward the shell's `API_BASE_URL` into that define: set it with `export API_BASE_URL=http://127.0.0.1:3000` in Bash or `$env:API_BASE_URL = 'http://127.0.0.1:3000'` in PowerShell. `.env.example` is a reference, not a file the scripts execute. Do not place credentials in compile-time defines or publish local database files, logs, or process listings. The contract requires no API token.
+For direct Flutter commands, pass `--dart-define=API_BASE_URL=...` to `flutter run` or `flutter build`; restart/rebuild to change it. The developer scripts forward the shell's `API_BASE_URL` into that define: set it with `export API_BASE_URL=http://127.0.0.1:3000` in Bash or `$env:API_BASE_URL = 'http://127.0.0.1:3000'` in PowerShell. No `.env` file is read by anything. Do not place credentials in compile-time defines or publish local database files, logs, or process listings. The contract requires no API token.
+
+## Packaging release bundles
+
+Build on the matching host, then archive from the repository root into a fresh output directory:
+
+```sh
+bash scripts/dev.sh build network_lookup
+bash scripts/package-macos.sh network_lookup /tmp/hudu-release
+```
+
+```powershell
+./scripts/dev.ps1 build network_lookup
+./scripts/package-windows.ps1 -App network_lookup -OutputDirectory "$env:TEMP/hudu-release"
+```
+
+Substitute `process_manager` for the other app. macOS zips contain the full `.app` with framework symlinks and executable permissions, and are labeled `universal` when the executable carries both Intel and Apple Silicon slices. Windows zips contain the complete Release directory (executable, DLLs, and `data/`); extract the whole archive together. Windows x64 machines need the [Microsoft Visual C++ x64 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) installed first; the archives do not bundle it, and an ARM64 build needs the matching ARM64 runtime. Both packagers refuse to overwrite an existing archive. These are unsigned development bundles; signing, notarization, and installers are outside this workflow.
+
+CI runs the same packagers on macOS and Windows and uploads artifacts named by app, OS, runner architecture, and commit, retained for 14 days. The native jobs also run each app's `test/native_smoke_test.dart` through the normal `flutter test` invocation. Golden generation in `test/screenshots_test.dart` is opt-in through `UPDATE_GOLDENS`, which CI does not set.
 
 ## Troubleshooting
 

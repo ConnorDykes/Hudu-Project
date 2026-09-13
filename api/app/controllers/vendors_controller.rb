@@ -9,12 +9,19 @@ class VendorsController < ApplicationController
     payload = permitted_payload(:mac, :oui, :name)
     vendor = Vendor.new(oui: payload[:mac] || payload[:oui], name: payload[:name], source: "user")
     vendor.validate!
-    if (existing = Vendor.find_by(oui: vendor.oui))
-      return render_error(:conflict, "vendor_exists", "A vendor is already registered for #{existing.oui}.", data: existing.api_attributes)
-    end
+    existing = Vendor.find_by(oui: vendor.oui)
+    return render_exists(existing) if existing
+
     vendor.save!
     render json: { data: vendor.api_attributes }, status: :created
   rescue ActiveRecord::RecordNotUnique
-    render_error(:conflict, "vendor_exists", "A vendor is already registered for #{vendor.oui}.", data: Vendor.find_by!(oui: vendor.oui).api_attributes)
+    # The unique index also handles simultaneous registrations of one OUI.
+    render_exists(Vendor.find_by!(oui: vendor.oui))
+  end
+
+  private
+
+  def render_exists(existing)
+    render_error(:conflict, "vendor_exists", "A vendor is already registered for #{existing.oui}.", data: existing.api_attributes)
   end
 end

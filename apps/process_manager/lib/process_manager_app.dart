@@ -86,7 +86,6 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(managerProvider);
     final controller = ref.read(managerProvider.notifier);
-    final c = context.colors;
     final refreshing = _page == 0 ? state.refreshing : state.historyLoading;
     return CallbackShortcuts(
       bindings: {
@@ -135,17 +134,9 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
               label: const Text('Refresh'),
             ),
           ],
-          footer: StatusPill(
-            state.historyLoading
-                ? 'Checking API'
-                : state.historyError != null
-                ? 'API unreachable'
-                : 'API connected',
-            color: state.historyLoading
-                ? c.textTertiary
-                : state.historyError != null
-                ? c.danger
-                : c.success,
+          footer: ApiStatusPill(
+            loading: state.historyLoading,
+            failed: state.historyError != null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -167,7 +158,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
     final count = '${state.processes.length} processes';
     final updated = state.updatedAt == null
         ? 'waiting for first refresh'
-        : 'updated ${_time(state.updatedAt!)}';
+        : 'updated ${formatClock(state.updatedAt!)}';
     final pending = state.pending.isEmpty
         ? ''
         : ' · ${state.pending.length} undelivered audit${state.pending.length == 1 ? '' : 's'}';
@@ -511,7 +502,8 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                           itemExtent: 38,
                           itemBuilder: (context, index) {
                             final event = state.history[index];
-                            return _HoverRow(
+                            return HoverRow(
+                              bottomBorder: true,
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
@@ -545,7 +537,7 @@ class _ProcessManagerPageState extends ConsumerState<ProcessManagerPage> {
                                     SizedBox(
                                       width: 210,
                                       child: Text(
-                                        _utc(event.occurredAt),
+                                        formatUtcSecond(event.occurredAt),
                                         style: AppText.mono.copyWith(
                                           color: c.textSecondary,
                                         ),
@@ -745,34 +737,6 @@ class _RowCheckbox extends StatelessWidget {
   }
 }
 
-/// Row hover highlight for read-only tables.
-class _HoverRow extends StatefulWidget {
-  const _HoverRow({required this.child});
-  final Widget child;
-  @override
-  State<_HoverRow> createState() => _HoverRowState();
-}
-
-class _HoverRowState extends State<_HoverRow> {
-  var _hovered = false;
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        decoration: BoxDecoration(
-          color: _hovered ? c.hover : Colors.transparent,
-          border: Border(bottom: BorderSide(color: c.hairline)),
-        ),
-        child: widget.child,
-      ),
-    );
-  }
-}
-
 class _ProcessRow extends StatelessWidget {
   const _ProcessRow({
     required this.process,
@@ -897,8 +861,3 @@ class _ProcessRow extends StatelessWidget {
     );
   }
 }
-
-String _time(DateTime value) =>
-    '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
-String _utc(DateTime value) =>
-    '${value.toUtc().toIso8601String().substring(0, 10)} ${_time(value.toUtc())} UTC';

@@ -3,6 +3,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:desktop_core/desktop_core.dart';
 import 'package:ffi/ffi.dart';
 
 import 'models.dart';
@@ -160,11 +161,8 @@ class WindowsProcessAdapter implements ProcessAdapter {
 
   @override
   Future<List<LocalProcess>> list() async {
-    final root = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-    final result = await _run(
-      '$root\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-    );
+    final command = powershellCommand(script);
+    final result = await _run(command.executable, command.arguments);
     if (result.exitCode != 0) {
       throw const ProcessFailure(
         'Windows could not read processes. Check PowerShell availability and local permissions.',

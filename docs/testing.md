@@ -104,7 +104,7 @@ bash scripts/package-macos.sh process_manager /tmp/hudu-release
 ./scripts/package-windows.ps1 -App process_manager -OutputDirectory "$env:TEMP/hudu-release"
 ```
 
-The macOS packager inspects the executable and labels a dual Intel/Apple Silicon build `universal`. Windows packaging defaults to x64. Both refuse to overwrite an existing archive. Windows requires the [Visual C++ runtime described in the script reference](../scripts/README.md); retain the entire extracted bundle.
+The macOS packager inspects the executable and labels a dual Intel/Apple Silicon build `universal`. Windows packaging defaults to x64. Both refuse to overwrite an existing archive. Windows requires the [Visual C++ runtime described in the development guide](development.md#packaging-release-bundles); retain the entire extracted bundle.
 
 These are development artifacts, without verified Developer ID signing/notarization or store publication. The Rails API remains a separate service.
 

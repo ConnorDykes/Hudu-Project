@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:desktop_core/desktop_core.dart';
+import 'package:desktop_core/testing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/main.dart';
-import 'package:network_lookup/lookup/lookup_controller.dart';
-import 'package:network_lookup/lookup/lookup_repository.dart';
-import 'package:network_lookup/network/network_adapter.dart';
+import 'package:network_lookup/network_lookup_app.dart';
+import 'package:network_lookup/src/lookup/lookup_controller.dart';
+import 'package:network_lookup/src/lookup/lookup_repository.dart';
+import 'package:network_lookup/src/network/network_adapter.dart';
 
 import 'test_support.dart';
 
@@ -20,22 +20,9 @@ void main() {
     FakeLookupRepository? repository,
     Size size = const Size(960, 680),
   }) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    configureTestView(tester, size: size);
     // Match production font metrics, independently of platform-installed fonts.
-    final font = FontLoader(
-      'packages/desktop_core/Inter',
-    )..addFont(rootBundle.load('packages/desktop_core/assets/fonts/Inter.ttf'));
-    await font.load();
-    final mono = FontLoader('packages/desktop_core/JetBrainsMono')
-      ..addFont(
-        rootBundle.load(
-          'packages/desktop_core/assets/fonts/JetBrainsMono-Regular.ttf',
-        ),
-      );
-    await mono.load();
+    await loadBundledFonts();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

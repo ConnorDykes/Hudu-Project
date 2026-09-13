@@ -4,9 +4,9 @@ import 'package:desktop_core/desktop_core.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:network_lookup/lookup/lookup_controller.dart';
-import 'package:network_lookup/lookup/lookup_repository.dart';
-import 'package:network_lookup/network/network_adapter.dart';
+import 'package:network_lookup/src/lookup/lookup_controller.dart';
+import 'package:network_lookup/src/lookup/lookup_repository.dart';
+import 'package:network_lookup/src/network/network_adapter.dart';
 
 import 'test_support.dart';
 

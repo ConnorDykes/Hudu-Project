@@ -1,16 +1,18 @@
 name: desktop_core
-description: Shared presentation and HTTP infrastructure for Hudu desktop tools.
+description: Shared presentation, HTTP, and native-command infrastructure for Hudu desktop tools.
 publish_to: none
 version: 1.0.0
 environment:
-  sdk: '>=3.8.0 <4.0.0'
+  sdk: ^3.13.2
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.5.0
-dev_dependencies:
+  # Only lib/testing.dart imports flutter_test; it is not exported by
+  # desktop_core.dart, so release builds never compile it.
   flutter_test:
     sdk: flutter
+  http: ^1.6.0
+dev_dependencies:
   flutter_lints: ^6.0.0
 flutter:
   assets:

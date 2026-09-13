@@ -10,11 +10,11 @@ usage() {
   echo '       bash scripts/dev.sh run|build network_lookup|process_manager'
   echo '       bash scripts/dev.sh doctor|help'
   echo 'setup installs project dependencies and prepares the development DB.'
-  echo 'Requires pinned toolchains on PATH; see scripts/README.md for Docker.'
+  echo 'Requires pinned toolchains on PATH; see docs/development.md.'
 }
 
 fail() { echo "Error: $*" >&2; exit 1; }
-require_command() { command -v "$1" >/dev/null 2>&1 || fail "Install $1 and add it to PATH; see scripts/README.md."; }
+require_command() { command -v "$1" >/dev/null 2>&1 || fail "Install $1 and add it to PATH; see docs/development.md."; }
 require_ruby() {
   require_command ruby
   require_command bundle

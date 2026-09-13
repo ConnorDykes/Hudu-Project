@@ -1,8 +1,8 @@
 # API reference
 
-The canonical definition is [contracts.md](contracts.md). This reference explains that contract; examples are synthetic payloads, not captured runtime results. Completed API and client integration checks are recorded in [verification results](verification-results.md).
+This is the canonical description of the wire contract shared by the Rails API and both desktop clients. Examples are synthetic payloads, not captured runtime results. Completed API and client integration checks are recorded in [verification results](verification-results.md).
 
-Base URL: `http://127.0.0.1:3000`. Use JSON request bodies and `Content-Type: application/json`. There is no authentication. Timestamps in responses are UTC ISO 8601. The service handles vendor lookup and persistence only; it has no endpoint to inspect or terminate OS processes.
+Base URL: `http://127.0.0.1:3000`, read by the clients from the compile-time `API_BASE_URL` define. Use JSON request bodies and `Content-Type: application/json`. There is no authentication. Timestamps in responses are UTC ISO 8601 with millisecond precision. The service handles vendor lookup and persistence only; it has no endpoint to inspect or terminate OS processes.
 
 ## Endpoints
 
@@ -27,7 +27,7 @@ curl --fail-with-body http://127.0.0.1:3000/lookups \
   -d '{"mac":"00:1B:63:84:45:E6","ip":"192.168.1.10"}'
 ```
 
-`mac` is required. Accept syntactically valid 48-bit MAC addresses in colon-separated, hyphen-separated, or 12 unseparated hex form and normalize to uppercase colon notation. `ip` is optional; if supplied, it must be IPv4. Locally administered addresses are allowed and may have no known vendor. Discovery adapters should ignore incomplete or zero neighbor entries before submitting a lookup.
+`mac` is required. Accept syntactically valid 48-bit MAC addresses in colon-separated, hyphen-separated, or 12 unseparated hex form and normalize to uppercase colon notation; mixed separators are rejected. `ip` is optional; if supplied, it must be IPv4. Locally administered addresses are allowed and may have no known vendor. Discovery adapters ignore incomplete or zero neighbor entries before submitting a lookup, and a local ARP miss is not persisted because there is no MAC to submit.
 
 Example `201` response:
 

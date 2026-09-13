@@ -238,7 +238,7 @@ class ManagerController extends Notifier<ManagerState> {
         } catch (error) {
           if (!ref.mounted) return;
           state = state.copy(
-            historyError: 'Audit history unavailable. ${_message(error)}',
+            historyError: 'Audit history unavailable. ${_describe(error)}',
           );
         }
       } while (_historyRefreshQueued);
@@ -413,7 +413,7 @@ class ManagerController extends Notifier<ManagerState> {
       );
     }
     if (failure != null) {
-      parts.add('One was not confirmed. ${_message(failure)}');
+      parts.add('One was not confirmed. ${_describe(failure)}');
     }
     return parts.join(' ');
   }
@@ -447,7 +447,7 @@ class ManagerController extends Notifier<ManagerState> {
       if (!ref.mounted) return;
       if (firstError != null) {
         state = state.copy(
-          auditError: 'Audit pending. ${_message(firstError)}',
+          auditError: 'Audit pending. ${_describe(firstError)}',
         );
       } else if (state.pending.isEmpty) {
         // A newer termination can append a memory-only event while this retry's
@@ -461,8 +461,8 @@ class ManagerController extends Notifier<ManagerState> {
     if (ref.mounted) await refreshHistory();
   }
 
-  String _message(Object error) =>
-      error is ApiException || error is ProcessFailure
-      ? error.toString()
-      : 'Check service availability and local storage, then retry.';
+  String _describe(Object error) => describeFailure(
+    error,
+    fallback: 'Check service availability and local storage, then retry.',
+  );
 }

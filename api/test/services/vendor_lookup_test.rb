@@ -21,7 +21,7 @@ class VendorLookupTest < ActiveSupport::TestCase
       stub_vendor(body: body, content_type: type)
       result = VendorLookup.new.call(lookup_attributes[:mac])
       assert_equal "failed", result.status, body.inspect
-      assert_equal "vendor_unavailable", result.error_code
+      assert_equal "vendor_unavailable", result.error.code
       assert_nil result.vendor
     end
   end
@@ -33,9 +33,9 @@ class VendorLookupTest < ActiveSupport::TestCase
       WebMock.reset!
       request = stub_request(:get, "https://api.macvendors.com/#{lookup_attributes[:mac]}").to_raise(exception.new("SECRET transport detail"))
       result = VendorLookup.new.call(lookup_attributes[:mac])
-      assert_equal code, result.error_code
+      assert_equal code, result.error.code
       assert_equal "failed", result.status
-      assert_not_includes result.message, "SECRET"
+      assert_not_includes result.error.message, "SECRET"
       assert_requested request, times: 1
     end
   end
@@ -43,7 +43,7 @@ class VendorLookupTest < ActiveSupport::TestCase
   test "redirects are not followed" do
     request = stub_request(:get, "https://api.macvendors.com/#{lookup_attributes[:mac]}")
       .to_return(status: 302, headers: { "Location" => "https://example.com/private" })
-    assert_equal "vendor_unavailable", VendorLookup.new.call(lookup_attributes[:mac]).error_code
+    assert_equal "vendor_unavailable", VendorLookup.new.call(lookup_attributes[:mac]).error.code
     assert_requested request, times: 1
     assert_not_requested :get, "https://example.com/private"
   end
@@ -53,8 +53,8 @@ class VendorLookupTest < ActiveSupport::TestCase
       stub_vendor(status: status, body: "SECRET" * 1024)
       result = VendorLookup.new.call(lookup_attributes[:mac])
       assert_equal "failed", result.status
-      assert_equal "vendor_unavailable", result.error_code
-      assert_not_includes result.message, "SECRET"
+      assert_equal "vendor_unavailable", result.error.code
+      assert_not_includes result.error.message, "SECRET"
     end
   end
 

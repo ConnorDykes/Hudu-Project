@@ -19,8 +19,8 @@ class LookupsController < ApplicationController
     result = VendorLookup.new.call(lookup.mac)
     lookup.update!(vendor: result.vendor, status: result.status)
 
-    if result.error_code
-      render_error(result.http_status, result.error_code, result.message, data: lookup.api_attributes)
+    if (error = result.error)
+      render_error(error.http_status, error.code, error.message, data: lookup.api_attributes)
     else
       render json: { data: lookup.api_attributes }, status: success_status
     end
