@@ -149,8 +149,8 @@ Download the [v1.1.0 development release](https://github.com/ConnorDykes/Hudu-Pr
 Start Rails before using API-backed features. macOS builds require macOS 12 or later. On Windows, extract the **entire** archive together and install the [Visual C++ x64 runtime](https://aka.ms/vs/17/release/vc_redist.x64.exe) if needed. These are development bundles without verified signing/notarization or installers; if platform security blocks a download, build from reviewed source rather than disabling system-wide protections. Native CI, artifact provenance, checksums, and manual-testing limits are recorded in the release notes and [verification record](docs/verification-results.md).
 
 
-## Documentation and AI collaboration
+## Documentation
 
-[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [AI development log](docs/ai-development.md) · [Verification history](docs/verification-history.md)
+[Architecture](docs/architecture.md) · [API](docs/api.md) · [Development](docs/development.md) · [Testing](docs/testing.md) · [Verification results](docs/verification-results.md) · [Verification history](docs/verification-history.md)
 
-The main agent owned contracts, shared infrastructure, integration, and delivery. Scoped subagents implemented the API, each desktop app, build tooling, and documentation; separate review agents checked the work. The [AI development log](docs/ai-development.md) records actual findings, corrections, and verification boundaries. The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.
+The banner is original vector artwork, not a Hudu corporate logo or an application screenshot.

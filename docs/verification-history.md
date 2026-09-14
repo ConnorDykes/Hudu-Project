@@ -50,18 +50,18 @@ This review is evidence of specific checks and corrections, not a guarantee of d
 
 | Area | Evidence |
 | --- | --- |
-| Rails API | Main independently reran **39 tests / 438 assertions**, zero failures/errors/skips. RuboCop: 34 files clean. Brakeman: zero warnings. Dependency advisory audit: clean. |
+| Rails API | Reran **39 tests / 438 assertions**, zero failures/errors/skips. RuboCop: 34 files clean. Brakeman: zero warnings. Dependency advisory audit: clean. |
 | Shared Flutter package | Analysis clean; **7 tests** pass, including HTTP behavior and layout/navigation at two window sizes. |
 | Network Lookup | Analysis clean; **41 default tests** pass on macOS, with three opt-in cases skipped. This includes native interfaces/cache and own-IP checks, shared operation deadlines, process-start timing, pipe cleanup, and Windows loading text. Two opt-in real Rails tests pass, including a live vendor lookup; the production-widget golden comparison also passes. |
 | Process Manager | Analysis clean; **37 default tests** pass on macOS, with two opt-in cases skipped. Includes a real disposable-child termination, audit outbox recovery, concurrent delivery/history regressions, and storage-warning widget cases. The real Rails audit smoke also passes. |
 | Live HTTP | Health 200; lookup 201 with persisted Apple vendor; disposable-child audit 201, identical retry 200, conflicting retry 409, and history readback. |
 | Container | Hosted Compose test passes startup, JSON event creation, service restart, identical retry, and persistence readback. |
 | Native platforms | Final hosted run passes native adapter tests and release builds for both apps on macOS and Windows. The Windows network interface stage takes 8,491 ms, neighbor cache 816 ms, and own-IP metadata 1,983 ms; every native assertion passes. Only test-harness-created processes are terminated. |
-| Local release builds | Both macOS release builds pass. Main inspected the app executables and Dart frameworks: both have Intel x86_64 and Apple Silicon arm64 slices; minimum macOS version 12.0. |
-| Downloadable archives | Main downloaded all four final CI archives and passed ZIP integrity, safe-path, runtime/data, and bundled font-license checks. Extracted macOS executables and Dart frameworks are universal with minimum macOS 12.0; Windows executables are PE32+ x86-64. The [v1.0.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.0.0) includes the original ZIPs and SHA-256 checksums. |
-| Clean clone | A fresh clone of the public repository passes `bash scripts/dev.sh setup`, `bash scripts/dev.sh check`, and the Network Lookup macOS release build. Following the reviewed fixes, the updated clean clone separately passes all 37 Process Manager and 41 Network Lookup tests. Main also rebuilt the final Network Lookup macOS release locally. |
+| Local release builds | Both macOS release builds pass. Inspected the app executables and Dart frameworks: both have Intel x86_64 and Apple Silicon arm64 slices; minimum macOS version 12.0. |
+| Downloadable archives | All four final CI archives were downloaded and passed ZIP integrity, safe-path, runtime/data, and bundled font-license checks. Extracted macOS executables and Dart frameworks are universal with minimum macOS 12.0; Windows executables are PE32+ x86-64. The [v1.0.0 development release](https://github.com/ConnorDykes/Hudu-Project/releases/tag/v1.0.0) includes the original ZIPs and SHA-256 checksums. |
+| Clean clone | A fresh clone of the public repository passes `bash scripts/dev.sh setup`, `bash scripts/dev.sh check`, and the Network Lookup macOS release build. Following the reviewed fixes, the updated clean clone separately passes all 37 Process Manager and 41 Network Lookup tests. The final Network Lookup macOS release was also rebuilt locally. |
 | Visuals | Original SVG banner and both actual production-widget previews were rendered and visually inspected. Previews use synthetic records, bundled Inter, and Material icons; they contain no private machine data. |
-| Independent review | API/shared/build reviewer: no actionable findings. App reviewer: two concurrency findings, both corrected with regression tests and accepted in targeted re-review. |
+| Code review | API, shared package, and build tooling: no actionable findings. Desktop apps: two concurrency findings, both corrected with regression tests and confirmed in a targeted follow-up review. |
 
 The **85-test Flutter total** is 7 shared + 41 network + 37 process tests on macOS. Linux skips native cases; screenshots and real HTTP tests are opt-in and are not included in that default total. These counts are not code-coverage percentages.
 
@@ -71,7 +71,7 @@ The **85-test Flutter total** is 7 shared + 41 network + 37 process tests on mac
 2. **Audit acknowledgment precision:** event creation uses millisecond timestamps matching API serialization; retry identity/time stay stable. Regression and real API tests pass.
 3. **Concurrent history refresh:** a queued follow-up prevents an older GET from leaving history stale after audit delivery. Controlled delayed-response regression passes.
 4. **Concurrent storage failure:** an older successful upload cannot clear a newer memory-only event's warning. Controller and widget regressions preserve the warning and prevent a false “Saved locally” label.
-5. **Windows discovery timeout:** CI proved that an eight-second command deadline was exceeded; cold PowerShell/CIM initialization is the likely explanation, not a measured root-cause guarantee. Windows now has one shared 30-second discovery deadline including startup. No automatic retries or native-test skips were added. A read-only reviewer caught unconsumed pipes on the late-start cleanup path; both pipes are now cancelled, with buffered-output and refused-termination regressions. Targeted re-review found no remaining actionable issue.
+5. **Windows discovery timeout:** CI proved that an eight-second command deadline was exceeded; cold PowerShell/CIM initialization is the likely explanation, not a measured root-cause guarantee. Windows now has one shared 30-second discovery deadline including startup. No automatic retries or native-test skips were added. Review caught unconsumed pipes on the late-start cleanup path; both pipes are now cancelled, with buffered-output and refused-termination regressions. A targeted follow-up review found no remaining actionable issue.
 
 ## Hardening pass (September 10, 2026, after 3f43162)
 
